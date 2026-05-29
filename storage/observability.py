@@ -8,8 +8,11 @@ import time
 from dataclasses import dataclass, field, asdict
 from typing import Any
 
-_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs", "observability.db")
+_DB_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "logs", "observability.db"
+)
 log = logging.getLogger("jarvis.obs")
+
 
 def conectar_banco() -> sqlite3.Connection:
     os.makedirs(os.path.dirname(_DB_PATH), exist_ok=True)
@@ -44,6 +47,7 @@ def conectar_banco() -> sqlite3.Connection:
     c.commit()
     return c
 
+
 def registrar_acao(
     tipo: str,
     descricao: str = "",
@@ -71,6 +75,7 @@ def registrar_acao(
     except Exception as exc:
         log.debug("obs registrar_acao: %s", exc)
 
+
 def registrar_metrica(nome: str, valor: float, unidade: str = ""):
     try:
         with conectar_banco() as c:
@@ -82,13 +87,14 @@ def registrar_metrica(nome: str, valor: float, unidade: str = ""):
     except Exception as exc:
         log.debug("obs registrar_metrica: %s", exc)
 
+
 class Temporizador:
 
     def __init__(self, tipo: str, modulo: str = "", dados: dict | None = None):
-        self._tipo    = tipo
-        self._modulo  = modulo
-        self._dados   = dados or {}
-        self._inicio  = 0.0
+        self._tipo = tipo
+        self._modulo = modulo
+        self._dados = dados or {}
+        self._inicio = 0.0
 
     def __enter__(self) -> "Temporizador":
         self._inicio = time.time()
@@ -96,7 +102,7 @@ class Temporizador:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         duracao_ms = int((time.time() - self._inicio) * 1000)
-        sucesso    = exc_type is None
+        sucesso = exc_type is None
         registrar_acao(
             tipo=self._tipo,
             modulo=self._modulo,
@@ -105,6 +111,7 @@ class Temporizador:
             dados=self._dados,
         )
         registrar_metrica(f"duracao.{self._tipo}", duracao_ms, "ms")
+
 
 def historico_acoes(tipo: str | None = None, limite: int = 50) -> list[dict]:
     try:
@@ -125,6 +132,7 @@ def historico_acoes(tipo: str | None = None, limite: int = 50) -> list[dict]:
     except Exception:
         return []
 
+
 def resumo_metricas(nome: str, janela_s: int = 3600) -> dict:
     limite_ts = time.time() - janela_s
     try:
@@ -137,15 +145,16 @@ def resumo_metricas(nome: str, janela_s: int = 3600) -> dict:
             if not valores:
                 return {"nome": nome, "amostras": 0}
             return {
-                "nome":     nome,
+                "nome": nome,
                 "amostras": len(valores),
-                "media":    round(sum(valores) / len(valores), 2),
-                "min":      round(min(valores), 2),
-                "max":      round(max(valores), 2),
+                "media": round(sum(valores) / len(valores), 2),
+                "min": round(min(valores), 2),
+                "max": round(max(valores), 2),
                 "janela_s": janela_s,
             }
     except Exception:
         return {"nome": nome, "amostras": 0}
+
 
 def taxa_erros(janela_s: int = 3600) -> float:
     limite_ts = time.time() - janela_s
@@ -160,6 +169,7 @@ def taxa_erros(janela_s: int = 3600) -> float:
             return round(erros / total, 4) if total else 0.0
     except Exception:
         return 0.0
+
 
 def purgar_antigos(dias: int = 7) -> int:
     limite = time.time() - dias * 86400

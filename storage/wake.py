@@ -8,12 +8,14 @@ from datetime import datetime
 from enum import Enum, auto
 from typing import Sequence
 
+
 class WakeIntent(Enum):
     NONE = auto()
     ACTIVATION = auto()
     COMMAND = auto()
     START_MONITORING = auto()
     STOP_MONITORING = auto()
+
 
 @dataclass(frozen=True, slots=True)
 class WakeResult:
@@ -33,59 +35,148 @@ class WakeResult:
         yield self.detected
         yield self.command
 
+
 class WakeWordConfig:
 
     CANON: str = "jarvis"
 
     STT_CORRECTIONS: tuple[tuple[str, str], ...] = (
-        ("jarvus",   "jarvis"), ("jervis",  "jarvis"), ("garvis",   "jarvis"),
-        ("carvis",   "jarvis"), ("harvis",  "jarvis"), ("marvis",   "jarvis"),
-        ("barvis",   "jarvis"), ("jarves",  "jarvis"), ("jarvos",   "jarvis"),
-        ("javis",    "jarvis"), ("jarviz",  "jarvis"), ("jarviss",  "jarvis"),
-        ("jarvice",  "jarvis"), ("yervis",  "jarvis"), ("jerbis",   "jarvis"),
-        ("jarbis",   "jarvis"), ("gervis",  "jarvis"), ("jarv",     "jarvis"),
-        ("jarvi",    "jarvis"), ("jevis",   "jarvis"), ("jerviz",   "jarvis"),
-        ("jarvish",  "jarvis"), ("sharvis", "jarvis"), ("yarvis",   "jarvis"),
-        ("jarvies",  "jarvis"), ("jarvese", "jarvis"), ("djervis",  "jarvis"),
-        ("djavis",   "jarvis"), ("dja vis", "jarvis"),
+        ("jarvus", "jarvis"),
+        ("jervis", "jarvis"),
+        ("garvis", "jarvis"),
+        ("carvis", "jarvis"),
+        ("harvis", "jarvis"),
+        ("marvis", "jarvis"),
+        ("barvis", "jarvis"),
+        ("jarves", "jarvis"),
+        ("jarvos", "jarvis"),
+        ("javis", "jarvis"),
+        ("jarviz", "jarvis"),
+        ("jarviss", "jarvis"),
+        ("jarvice", "jarvis"),
+        ("yervis", "jarvis"),
+        ("jerbis", "jarvis"),
+        ("jarbis", "jarvis"),
+        ("gervis", "jarvis"),
+        ("jarv", "jarvis"),
+        ("jarvi", "jarvis"),
+        ("jevis", "jarvis"),
+        ("jerviz", "jarvis"),
+        ("jarvish", "jarvis"),
+        ("sharvis", "jarvis"),
+        ("yarvis", "jarvis"),
+        ("jarvies", "jarvis"),
+        ("jarvese", "jarvis"),
+        ("djervis", "jarvis"),
+        ("djavis", "jarvis"),
+        ("dja vis", "jarvis"),
     )
 
-    WAKE_WORDS: frozenset[str] = frozenset({
-        "jarvis", "j.a.r.v.i.s", "jarvis ai", "jarvis aí",
-        "ei jarvis", "hey jarvis", "hi jarvis", "oi jarvis",
-        "ola jarvis", "ok jarvis", "yo jarvis", "e jarvis",
-        "oh jarvis", "por favor jarvis", "fala jarvis",
-        "me escuta jarvis", "escuta jarvis", "me ouve jarvis",
-        "ouve jarvis", "me ouça jarvis", "ouça jarvis",
-        "ativa jarvis", "ativar jarvis", "acorda jarvis",
-        "acorde jarvis", "acorda", "acorde", "assistente",
-        "modo escuta", "ativar sistema",
-        "ola jer", "ola je", "ola jar", "ola j",
-        "ei assistente", "hey assistente", "oi assistente",
-        "e aí jarvis", "e ai jarvis", "eai jarvis",
-        "bom dia jarvis", "boa tarde jarvis", "boa noite jarvis",
-        "jar", "jers", "james", "jefferson", "germes", "jabes",
-        "germe", "chaves", "chave", "jota", "jay", "jay vis",
-        "jar viz", "jar is", "jarvis por favor", "jarvis favor",
-        "jarvis meu", "meu jarvis", "chega jarvis",
-        "psiu jarvis", "psst jarvis", "alô jarvis", "alo jarvis",
-        "jarvis escuta", "jarvis ouve", "jarvis tá aí",
-        "jarvis ta ai", "jarvis você", "jarvis voce",
-        "jarvis preciso", "jarvis quero",
-        "jarvis me", "jarvis um", "jarvis o", "jarvis a",
-        "jarvis e", "charles",
-    })
+    WAKE_WORDS: frozenset[str] = frozenset(
+        {
+            "jarvis",
+            "j.a.r.v.i.s",
+            "jarvis ai",
+            "jarvis aí",
+            "ei jarvis",
+            "hey jarvis",
+            "hi jarvis",
+            "oi jarvis",
+            "ola jarvis",
+            "ok jarvis",
+            "yo jarvis",
+            "e jarvis",
+            "oh jarvis",
+            "por favor jarvis",
+            "fala jarvis",
+            "me escuta jarvis",
+            "escuta jarvis",
+            "me ouve jarvis",
+            "ouve jarvis",
+            "me ouça jarvis",
+            "ouça jarvis",
+            "ativa jarvis",
+            "ativar jarvis",
+            "acorda jarvis",
+            "acorde jarvis",
+            "acorda",
+            "acorde",
+            "assistente",
+            "modo escuta",
+            "ativar sistema",
+            "ola jer",
+            "ola je",
+            "ola jar",
+            "ola j",
+            "ei assistente",
+            "hey assistente",
+            "oi assistente",
+            "e aí jarvis",
+            "e ai jarvis",
+            "eai jarvis",
+            "bom dia jarvis",
+            "boa tarde jarvis",
+            "boa noite jarvis",
+            "jar",
+            "jers",
+            "james",
+            "jefferson",
+            "germes",
+            "jabes",
+            "germe",
+            "chaves",
+            "chave",
+            "jota",
+            "jay",
+            "jay vis",
+            "jar viz",
+            "jar is",
+            "jarvis por favor",
+            "jarvis favor",
+            "jarvis meu",
+            "meu jarvis",
+            "chega jarvis",
+            "psiu jarvis",
+            "psst jarvis",
+            "alô jarvis",
+            "alo jarvis",
+            "jarvis escuta",
+            "jarvis ouve",
+            "jarvis tá aí",
+            "jarvis ta ai",
+            "jarvis você",
+            "jarvis voce",
+            "jarvis preciso",
+            "jarvis quero",
+            "jarvis me",
+            "jarvis um",
+            "jarvis o",
+            "jarvis a",
+            "jarvis e",
+            "charles",
+        }
+    )
 
-    MONITORING_START: frozenset[str] = frozenset({
-        "monitorar tela", "monitorar", "iniciar monitoramento",
-        "ligar monitoramento", "ativar monitoramento",
-        "monitorar sistema", "vigiar tela",
-    })
+    MONITORING_START: frozenset[str] = frozenset(
+        {
+            "monitorar tela",
+            "monitorar",
+            "iniciar monitoramento",
+            "ligar monitoramento",
+            "ativar monitoramento",
+            "monitorar sistema",
+            "vigiar tela",
+        }
+    )
 
-    MONITORING_STOP: frozenset[str] = frozenset({
-        "parar monitoramento", "desligar monitoramento",
-        "desativar monitoramento", "parar monitor",
-    })
+    MONITORING_STOP: frozenset[str] = frozenset(
+        {
+            "parar monitoramento",
+            "desligar monitoramento",
+            "desativar monitoramento",
+            "parar monitor",
+        }
+    )
 
     RESPONSES_MORNING: tuple[str, ...] = (
         "Bom dia, senhor.",
@@ -121,9 +212,18 @@ class WakeWordConfig:
         "A iniciar a calibração, senhor.",
         "Condições de surf razoáveis, senhor.",
         "Neve quente, senhor. Eu sei o que isso significa.",
-        "Tô ouvindo.", "Pode falar.", "Estou aqui.", "Oi!",
-        "Fala aí.", "Como posso ajudar?", "Diga.",
-        "Tô na escuta.", "Pronto.", "Manda.", "O que manda?", "Pois não?",
+        "Tô ouvindo.",
+        "Pode falar.",
+        "Estou aqui.",
+        "Oi!",
+        "Fala aí.",
+        "Como posso ajudar?",
+        "Diga.",
+        "Tô na escuta.",
+        "Pronto.",
+        "Manda.",
+        "O que manda?",
+        "Pois não?",
         "Para o senhor, sempre.",
         "Online e pronto, senhor.",
         "Estou aqui, senhor. O que o senhor precisa?",
@@ -160,21 +260,26 @@ class WakeWordConfig:
     FUZZY_MIN_LEN: int = 4
     FUZZY_MAX_LEN: int = 9
 
+
 _CFG = WakeWordConfig()
+
 
 def strip_accents(text: str) -> str:
     nfd = unicodedata.normalize("NFD", text)
     return "".join(ch for ch in nfd if unicodedata.category(ch) != "Mn")
+
 
 def apply_stt_corrections(text: str, corrections: Sequence[tuple[str, str]]) -> str:
     for wrong, right in corrections:
         text = text.replace(wrong, right)
     return text
 
+
 RE_GREETING_GLUED = re.compile(r"(hey|hi|ei|yo|ok|oi|ola|eai)(jarvis)")
 RE_PUNCTUATION = re.compile(r"[.,!?;:'\"-]")
 RE_JARVIS_GLUED = re.compile(r"jarvis([a-z])")
 RE_SPACES = re.compile(r"\s+")
+
 
 def normalizar_frase(texto: str) -> str:
     t = texto.lower().strip()
@@ -185,6 +290,7 @@ def normalizar_frase(texto: str) -> str:
     t = RE_SPACES.sub(" ", t)
     t = apply_stt_corrections(t, _CFG.STT_CORRECTIONS)
     return t
+
 
 def distancia_edicao(a: str, b: str) -> int:
     if abs(len(a) - len(b)) > _CFG.FUZZY_MAX_DIST + 1:
@@ -199,37 +305,45 @@ def distancia_edicao(a: str, b: str) -> int:
     for i, ca in enumerate(a):
         curr = [i + 1]
         for j, cb in enumerate(b):
-            curr.append(min(
-                prev[j + 1] + 1,
-                curr[j] + 1,
-                prev[j] + (ca != cb),
-            ))
+            curr.append(
+                min(
+                    prev[j + 1] + 1,
+                    curr[j] + 1,
+                    prev[j] + (ca != cb),
+                )
+            )
         prev = curr
 
     return prev[len(b)]
 
+
 def normalizar_set(s: frozenset[str]) -> list[str]:
     return sorted({normalizar_frase(w) for w in s}, key=len, reverse=True)
 
-WAKE_WORDS_NORM:        list[str] = normalizar_set(_CFG.WAKE_WORDS)
-MON_START_NORM:         list[str] = normalizar_set(_CFG.MONITORING_START)
-MON_STOP_NORM:          list[str] = normalizar_set(_CFG.MONITORING_STOP)
+
+WAKE_WORDS_NORM: list[str] = normalizar_set(_CFG.WAKE_WORDS)
+MON_START_NORM: list[str] = normalizar_set(_CFG.MONITORING_START)
+MON_STOP_NORM: list[str] = normalizar_set(_CFG.MONITORING_STOP)
+
 
 def match_prefix(frase: str, palavras_norm: list[str]) -> str | None:
     for w in palavras_norm:
         if frase == w:
             return ""
         if frase.startswith(w + " "):
-            return frase[len(w) + 1:].strip()
+            return frase[len(w) + 1 :].strip()
     return None
+
 
 def match_substring(frase: str, palavras_norm: list[str]) -> bool:
     return any(w in frase for w in palavras_norm)
+
 
 def jarvis_isolado(frase: str) -> bool:
     if _CFG.CANON not in frase:
         return False
     return bool(re.search(r"(^|\s)" + re.escape(_CFG.CANON) + r"($|\s)", frase))
+
 
 def fuzzy_token_match(token: str) -> bool:
     t = token.strip(".")
@@ -248,6 +362,7 @@ def fuzzy_token_match(token: str) -> bool:
             return True
 
     return False
+
 
 def processar_wake(texto: str) -> WakeResult:
     if not texto:
@@ -274,17 +389,20 @@ def processar_wake(texto: str) -> WakeResult:
     tokens = frase.split()
     for i, tok in enumerate(tokens):
         if fuzzy_token_match(tok):
-            comando = " ".join(tokens[i + 1:]).strip()
+            comando = " ".join(tokens[i + 1 :]).strip()
             intent = WakeIntent.COMMAND if comando else WakeIntent.ACTIVATION
             return WakeResult(True, intent, comando)
 
     return WakeResult(False, WakeIntent.NONE)
 
+
 def e_comando_monitoramento(texto: str) -> bool:
     return match_substring(normalizar_frase(texto), MON_START_NORM)
 
+
 def e_comando_parar_monitor(texto: str) -> bool:
     return match_substring(normalizar_frase(texto), MON_STOP_NORM)
+
 
 def resposta_ativacao_aleatoria() -> str:
     hora = datetime.now().hour

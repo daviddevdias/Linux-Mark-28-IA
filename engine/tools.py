@@ -7,7 +7,10 @@ TOOL_DECLARATIONS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "app_name": {"type": "string", "description": "Nome do app. Ex: 'chrome', 'spotify', 'vscode'."}
+                    "app_name": {
+                        "type": "string",
+                        "description": "Nome do app. Ex: 'chrome', 'spotify', 'vscode'.",
+                    }
                 },
                 "required": ["app_name"],
             },
@@ -21,10 +24,22 @@ TOOL_DECLARATIONS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "action": {"type": "string", "description": "Acao: 'fechar', 'minimizar_tudo', 'print', 'bloqueio', 'limpar', 'status', 'volume', 'type', 'hotkey'."},
-                    "nivel":  {"type": "integer", "description": "Volume 0-100 (só para action='volume')."},
-                    "text":   {"type": "string",  "description": "Texto para digitar (action='type')."},
-                    "keys":   {"type": "string",  "description": "Atalho de teclado ex: 'ctrl+c' (action='hotkey')."},
+                    "action": {
+                        "type": "string",
+                        "description": "Acao: 'fechar', 'minimizar_tudo', 'print', 'bloqueio', 'limpar', 'status', 'volume', 'type', 'hotkey'.",
+                    },
+                    "nivel": {
+                        "type": "integer",
+                        "description": "Volume 0-100 (só para action='volume').",
+                    },
+                    "text": {
+                        "type": "string",
+                        "description": "Texto para digitar (action='type').",
+                    },
+                    "keys": {
+                        "type": "string",
+                        "description": "Atalho de teclado ex: 'ctrl+c' (action='hotkey').",
+                    },
                 },
                 "required": ["action"],
             },
@@ -38,8 +53,14 @@ TOOL_DECLARATIONS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "task":    {"type": "string", "description": "Descrição da tarefa em português. A IA gera o comando."},
-                    "command": {"type": "string", "description": "Comando direto (opcional, substitui geração automática)."},
+                    "task": {
+                        "type": "string",
+                        "description": "Descrição da tarefa em português. A IA gera o comando.",
+                    },
+                    "command": {
+                        "type": "string",
+                        "description": "Comando direto (opcional, substitui geração automática).",
+                    },
                 },
                 "required": ["task"],
             },
@@ -67,10 +88,22 @@ TOOL_DECLARATIONS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "action": {"type": "string", "description": "Acao: 'open', 'search', 'click', 'type', 'close_tab'."},
-                    "url":    {"type": "string", "description": "URL para navegar (action='open')."},
-                    "query":  {"type": "string", "description": "Termo para pesquisar (action='search')."},
-                    "text":   {"type": "string", "description": "Texto para digitar (action='type')."},
+                    "action": {
+                        "type": "string",
+                        "description": "Acao: 'open', 'search', 'click', 'type', 'close_tab'.",
+                    },
+                    "url": {
+                        "type": "string",
+                        "description": "URL para navegar (action='open').",
+                    },
+                    "query": {
+                        "type": "string",
+                        "description": "Termo para pesquisar (action='search').",
+                    },
+                    "text": {
+                        "type": "string",
+                        "description": "Texto para digitar (action='type').",
+                    },
                 },
                 "required": ["action"],
             },
@@ -84,7 +117,10 @@ TOOL_DECLARATIONS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "Nome do vídeo, música ou canal."}
+                    "query": {
+                        "type": "string",
+                        "description": "Nome do vídeo, música ou canal.",
+                    }
                 },
                 "required": ["query"],
             },
@@ -98,9 +134,18 @@ TOOL_DECLARATIONS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "action":        {"type": "string", "description": "Acao: 'play', 'pause', 'proxima', 'anterior', 'favoritas'."},
-                    "search_query":  {"type": "string", "description": "Música ou artista para buscar."},
-                    "playlist_name": {"type": "string", "description": "Nome da playlist."},
+                    "action": {
+                        "type": "string",
+                        "description": "Acao: 'play', 'pause', 'proxima', 'anterior', 'favoritas'.",
+                    },
+                    "search_query": {
+                        "type": "string",
+                        "description": "Música ou artista para buscar.",
+                    },
+                    "playlist_name": {
+                        "type": "string",
+                        "description": "Nome da playlist.",
+                    },
                 },
                 "required": [],
             },
@@ -114,8 +159,11 @@ TOOL_DECLARATIONS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "city":     {"type": "string", "description": "Nome da cidade."},
-                    "forecast": {"type": "string", "description": "'hoje' ou 'amanha'. Padrão: 'hoje'."},
+                    "city": {"type": "string", "description": "Nome da cidade."},
+                    "forecast": {
+                        "type": "string",
+                        "description": "'hoje' ou 'amanha'. Padrão: 'hoje'.",
+                    },
                 },
                 "required": ["city"],
             },
@@ -129,10 +177,19 @@ TOOL_DECLARATIONS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "op":     {"type": "string", "description": "'add', 'list' ou 'remove'. Padrão: 'add'."},
-                    "hora":   {"type": "string", "description": "Horário HH:MM."},
-                    "missao": {"type": "string", "description": "Descrição do lembrete."},
-                    "data":   {"type": "string", "description": "Data YYYY-MM-DD. Opcional."},
+                    "op": {
+                        "type": "string",
+                        "description": "'add', 'list' ou 'remove'. Padrão: 'add'.",
+                    },
+                    "hora": {"type": "string", "description": "Horário HH:MM."},
+                    "missao": {
+                        "type": "string",
+                        "description": "Descrição do lembrete.",
+                    },
+                    "data": {
+                        "type": "string",
+                        "description": "Data YYYY-MM-DD. Opcional.",
+                    },
                 },
                 "required": [],
             },
@@ -146,10 +203,19 @@ TOOL_DECLARATIONS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "device":     {"type": "string", "description": "Use 'tv'."},
-                    "action":     {"type": "string", "description": "'on', 'off', 'status' ou 'youtube' para abrir o app YouTube na TV."},
-                    "value":      {"type": "integer", "description": "Valor numérico (volume, brilho). Opcional."},
-                    "capability": {"type": "string",  "description": "Capacidade SmartThings. Opcional."},
+                    "device": {"type": "string", "description": "Use 'tv'."},
+                    "action": {
+                        "type": "string",
+                        "description": "'on', 'off', 'status' ou 'youtube' para abrir o app YouTube na TV.",
+                    },
+                    "value": {
+                        "type": "integer",
+                        "description": "Valor numérico (volume, brilho). Opcional.",
+                    },
+                    "capability": {
+                        "type": "string",
+                        "description": "Capacidade SmartThings. Opcional.",
+                    },
                 },
                 "required": ["device", "action"],
             },
@@ -163,11 +229,26 @@ TOOL_DECLARATIONS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "action":    {"type": "string",  "description": "'list', 'create_file', 'create_folder', 'delete', 'read', 'backup', 'disk'."},
-                    "path":      {"type": "string",  "description": "Caminho ou atalho: 'desktop', 'downloads', etc."},
-                    "name":      {"type": "string",  "description": "Nome do arquivo ou pasta."},
-                    "content":   {"type": "string",  "description": "Conteúdo de texto (create_file)."},
-                    "permanent": {"type": "boolean", "description": "Se true, deleta sem lixeira."},
+                    "action": {
+                        "type": "string",
+                        "description": "'list', 'create_file', 'create_folder', 'delete', 'read', 'backup', 'disk'.",
+                    },
+                    "path": {
+                        "type": "string",
+                        "description": "Caminho ou atalho: 'desktop', 'downloads', etc.",
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Nome do arquivo ou pasta.",
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "Conteúdo de texto (create_file).",
+                    },
+                    "permanent": {
+                        "type": "boolean",
+                        "description": "Se true, deleta sem lixeira.",
+                    },
                 },
                 "required": ["action"],
             },
@@ -181,9 +262,15 @@ TOOL_DECLARATIONS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "category": {"type": "string", "description": "'preferences', 'personal', 'work', 'goals'."},
-                    "key":      {"type": "string", "description": "Identificador. Ex: 'cidade_favorita'."},
-                    "value":    {"type": "string", "description": "Valor a guardar."},
+                    "category": {
+                        "type": "string",
+                        "description": "'preferences', 'personal', 'work', 'goals'.",
+                    },
+                    "key": {
+                        "type": "string",
+                        "description": "Identificador. Ex: 'cidade_favorita'.",
+                    },
+                    "value": {"type": "string", "description": "Valor a guardar."},
                 },
                 "required": ["category", "key", "value"],
             },
@@ -197,8 +284,14 @@ TOOL_DECLARATIONS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "goal":    {"type": "string", "description": "Objetivo em linguagem natural."},
-                    "context": {"type": "string", "description": "Contexto adicional. Opcional."},
+                    "goal": {
+                        "type": "string",
+                        "description": "Objetivo em linguagem natural.",
+                    },
+                    "context": {
+                        "type": "string",
+                        "description": "Contexto adicional. Opcional.",
+                    },
                 },
                 "required": ["goal"],
             },
@@ -212,10 +305,22 @@ TOOL_DECLARATIONS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "description": {"type": "string",  "description": "O que o código deve fazer."},
-                    "language":    {"type": "string",  "description": "'python', 'javascript', 'bash'. Padrão: 'python'."},
-                    "code":        {"type": "string",  "description": "Código existente para editar (opcional)."},
-                    "execute":     {"type": "boolean", "description": "Se true, executa imediatamente."},
+                    "description": {
+                        "type": "string",
+                        "description": "O que o código deve fazer.",
+                    },
+                    "language": {
+                        "type": "string",
+                        "description": "'python', 'javascript', 'bash'. Padrão: 'python'.",
+                    },
+                    "code": {
+                        "type": "string",
+                        "description": "Código existente para editar (opcional).",
+                    },
+                    "execute": {
+                        "type": "boolean",
+                        "description": "Se true, executa imediatamente.",
+                    },
                 },
                 "required": ["description"],
             },
@@ -229,7 +334,10 @@ TOOL_DECLARATIONS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "question": {"type": "string", "description": "Pergunta sobre o conteúdo da tela. Opcional."}
+                    "question": {
+                        "type": "string",
+                        "description": "Pergunta sobre o conteúdo da tela. Opcional.",
+                    }
                 },
                 "required": [],
             },
@@ -243,7 +351,10 @@ TOOL_DECLARATIONS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "mode": {"type": "string", "description": "'gemini', 'ollama' ou 'auto'."}
+                    "mode": {
+                        "type": "string",
+                        "description": "'gemini', 'ollama' ou 'auto'.",
+                    }
                 },
                 "required": ["mode"],
             },
@@ -257,7 +368,10 @@ TOOL_DECLARATIONS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "task": {"type": "string", "description": "Instrução detalhada do que fazer na tela."}
+                    "task": {
+                        "type": "string",
+                        "description": "Instrução detalhada do que fazer na tela.",
+                    }
                 },
                 "required": ["task"],
             },
@@ -283,7 +397,10 @@ TOOL_DECLARATIONS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "segundos": {"type": "integer", "description": "Tempo em segundos para escutar o áudio (padrão 10)."}
+                    "segundos": {
+                        "type": "integer",
+                        "description": "Tempo em segundos para escutar o áudio (padrão 10).",
+                    }
                 },
                 "required": [],
             },

@@ -5,28 +5,30 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
+
 @dataclass
 class EstadoSistema:
-    ia_modo:         str   = "ollama"
-    ia_disponivel:   bool  = False
-    ia_modelo_ativo: str   = ""
-    usuario_ativo:   str   = "Chefe"
-    cidade_padrao:   str   = "Esteio,BR"
-    voz_ativa:       bool  = True
-    monitor_ativo:   bool  = False
-    alarme_ativo:    bool  = False
-    aguard_confirm:  bool  = False
-    ultimo_comando:  str   = ""
-    ultima_resposta: str   = ""
-    ts_ultimo_cmd:   float = 0.0
-    contexto_ativo:  dict  = field(default_factory=dict)
-    flags:           dict  = field(default_factory=dict)
+    ia_modo: str = "ollama"
+    ia_disponivel: bool = False
+    ia_modelo_ativo: str = ""
+    usuario_ativo: str = "Chefe"
+    cidade_padrao: str = "Esteio,BR"
+    voz_ativa: bool = True
+    monitor_ativo: bool = False
+    alarme_ativo: bool = False
+    aguard_confirm: bool = False
+    ultimo_comando: str = ""
+    ultima_resposta: str = ""
+    ts_ultimo_cmd: float = 0.0
+    contexto_ativo: dict = field(default_factory=dict)
+    flags: dict = field(default_factory=dict)
+
 
 class StateManager:
 
     def __init__(self):
-        self.estado   = EstadoSistema()
-        self.lock     = threading.RLock()
+        self.estado = EstadoSistema()
+        self.lock = threading.RLock()
         self.watchers: dict[str, list] = {}
 
     def get(self, chave: str, default: Any = None) -> Any:
@@ -48,7 +50,10 @@ class StateManager:
 
         try:
             from brain.event_bus import bus, ESTADO_ALTERADO
-            bus.publicar(ESTADO_ALTERADO, {"chave": chave, "antes": antigo, "depois": valor})
+
+            bus.publicar(
+                ESTADO_ALTERADO, {"chave": chave, "antes": antigo, "depois": valor}
+            )
         except Exception:
             pass
 
@@ -59,8 +64,7 @@ class StateManager:
     def snapshot(self) -> dict:
         with self.lock:
             return {
-                k: getattr(self.estado, k)
-                for k in self.estado.__dataclass_fields__
+                k: getattr(self.estado, k) for k in self.estado.__dataclass_fields__
             }
 
     def watch(self, chave: str, fn):
@@ -81,5 +85,6 @@ class StateManager:
     def get_flag(self, flag: str) -> bool:
         with self.lock:
             return bool(self.estado.flags.get(flag, False))
+
 
 state = StateManager()

@@ -28,18 +28,8 @@ app = None
 monitorando = False
 
 
-
-
-
-
-
 def nome():
     return get_nome() or "Chefe"
-
-
-
-
-
 
 
 def cidade_padrao():
@@ -53,21 +43,11 @@ def cidade_padrao():
         return "São Paulo"
 
 
-
-
-
-
-
 async def responder_e_falar(update: Update, texto: str):
     if not texto:
         return
     await update.message.reply_text(str(texto))
     asyncio.create_task(falar(str(texto)))
-
-
-
-
-
 
 
 @requer_autorizacao
@@ -80,11 +60,6 @@ async def cmd_jarvis(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not resposta:
         resposta = await router.responder(texto, nome=nome())
     await responder_e_falar(update, resposta)
-
-
-
-
-
 
 
 @requer_autorizacao
@@ -100,14 +75,10 @@ async def cmd_texto_livre(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await responder_e_falar(update, resposta_ia)
 
 
-
-
-
-
-
 @requer_autorizacao
 async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     from engine.ia_router import _DISPONIVEL, _MODELO_DETECTADO
+
     modelo = _MODELO_DETECTADO or "nenhum"
     ollama_status = "online" if _DISPONIVEL else "offline"
     msg = (
@@ -117,11 +88,6 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Monitor: {'ativo' if monitorando else 'inativo'}"
     )
     await update.message.reply_text(msg)
-
-
-
-
-
 
 
 @requer_autorizacao
@@ -135,11 +101,6 @@ async def cmd_clima(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await responder_e_falar(update, resposta)
 
 
-
-
-
-
-
 @requer_autorizacao
 async def cmd_clima_amanha(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cidade = " ".join(context.args).strip() if context.args else ""
@@ -150,15 +111,12 @@ async def cmd_clima_amanha(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await responder_e_falar(update, resposta)
 
 
-
-
-
-
-
 @requer_autorizacao
 async def cmd_alarme_add(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(context.args) < 2:
-        await update.message.reply_text("Use: /alarme HH:MM descricao ou /alarme YYYY-MM-DD HH:MM descricao")
+        await update.message.reply_text(
+            "Use: /alarme HH:MM descricao ou /alarme YYYY-MM-DD HH:MM descricao"
+        )
         return
     args = list(context.args)
     data_arg = None
@@ -168,11 +126,6 @@ async def cmd_alarme_add(update: Update, context: ContextTypes.DEFAULT_TYPE):
     missao = " ".join(args[1:])
     resposta = adicionar_alarme(hora, missao, data=data_arg)
     await responder_e_falar(update, resposta)
-
-
-
-
-
 
 
 @requer_autorizacao
@@ -188,11 +141,6 @@ async def cmd_alarme_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("\n".join(linhas))
 
 
-
-
-
-
-
 @requer_autorizacao
 async def cmd_alarme_remove(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(context.args) < 2:
@@ -204,20 +152,10 @@ async def cmd_alarme_remove(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await responder_e_falar(update, resposta)
 
 
-
-
-
-
-
 @requer_autorizacao
 async def cmd_stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
     interromper_voz()
     await update.message.reply_text("Voz interrompida.")
-
-
-
-
-
 
 
 @requer_autorizacao
@@ -232,20 +170,10 @@ async def cmd_spotify(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await responder_e_falar(update, resposta)
 
 
-
-
-
-
-
 @requer_autorizacao
 async def cmd_pausar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     resposta = await processar_diretriz("pausar")
     await responder_e_falar(update, resposta or "Música pausada.")
-
-
-
-
-
 
 
 @requer_autorizacao
@@ -254,20 +182,10 @@ async def cmd_continuar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await responder_e_falar(update, resposta or "Reprodução retomada.")
 
 
-
-
-
-
-
 @requer_autorizacao
 async def cmd_proxima(update: Update, context: ContextTypes.DEFAULT_TYPE):
     resposta = await processar_diretriz("proxima")
     await responder_e_falar(update, resposta or "Próxima faixa.")
-
-
-
-
-
 
 
 @requer_autorizacao
@@ -280,11 +198,6 @@ async def cmd_youtube(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await responder_e_falar(update, resposta or "Abrindo YouTube.")
 
 
-
-
-
-
-
 @requer_autorizacao
 async def cmd_monitorar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global monitorando
@@ -292,12 +205,9 @@ async def cmd_monitorar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     intervalo = max(5, int(intervalo_arg)) if intervalo_arg.isdigit() else 10
     monitorando = True
     resposta = await processar_diretriz(f"monitorar tela {intervalo}")
-    await responder_e_falar(update, resposta or f"Monitoramento ativo. Intervalo: {intervalo}s.")
-
-
-
-
-
+    await responder_e_falar(
+        update, resposta or f"Monitoramento ativo. Intervalo: {intervalo}s."
+    )
 
 
 @requer_autorizacao
@@ -308,21 +218,11 @@ async def cmd_parar_monitor(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await responder_e_falar(update, resposta or "Monitoramento desativado.")
 
 
-
-
-
-
-
 @requer_autorizacao
 async def cmd_tela(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Capturando e analisando a tela...")
     resposta = await processar_diretriz("olha tela")
     await responder_e_falar(update, resposta or "Análise concluída.")
-
-
-
-
-
 
 
 @requer_autorizacao
@@ -334,13 +234,9 @@ async def cmd_abrir(update: Update, context: ContextTypes.DEFAULT_TYPE):
     resposta = await processar_diretriz(f"abrir {app_nome}")
     if not resposta:
         from tasks.open_app import open_app
+
         resposta = open_app({"app_name": app_nome}) or f"Abrindo {app_nome}."
     await responder_e_falar(update, resposta)
-
-
-
-
-
 
 
 @requer_autorizacao
@@ -349,20 +245,10 @@ async def cmd_bloquear(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await responder_e_falar(update, resposta or "Tela bloqueada.")
 
 
-
-
-
-
-
 @requer_autorizacao
 async def cmd_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     resposta = await processar_diretriz("screenshot")
     await responder_e_falar(update, resposta or "Screenshot capturado.")
-
-
-
-
-
 
 
 @requer_autorizacao
@@ -371,20 +257,10 @@ async def cmd_tv_ligar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await responder_e_falar(update, resposta or "Ligando TV.")
 
 
-
-
-
-
-
 @requer_autorizacao
 async def cmd_tv_desligar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     resposta = await processar_diretriz("desligar tv")
     await responder_e_falar(update, resposta or "Desligando TV.")
-
-
-
-
-
 
 
 @requer_autorizacao
@@ -397,20 +273,10 @@ async def cmd_volume(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await responder_e_falar(update, resposta or f"Volume ajustado para {nivel}.")
 
 
-
-
-
-
-
 @requer_autorizacao
 async def cmd_trabalho(update: Update, context: ContextTypes.DEFAULT_TYPE):
     resposta = await processar_diretriz("trabalho")
     await responder_e_falar(update, resposta or "Modo trabalho ativado.")
-
-
-
-
-
 
 
 @requer_autorizacao
@@ -421,11 +287,6 @@ async def cmd_ia(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     msg = router.definir_modo(modo)
     await responder_e_falar(update, msg)
-
-
-
-
-
 
 
 @requer_autorizacao
@@ -469,58 +330,44 @@ async def cmd_ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(texto)
 
 
-
-
-
-
-
 async def configurar_comandos(application: Application):
     comandos = [
-        BotCommand("jarvis",       "Enviar comando ao Jarvis"),
-        BotCommand("status",       "Status do sistema"),
-        BotCommand("clima",        "Clima atual"),
-        BotCommand("amanha",       "Previsão amanhã"),
-        BotCommand("alarme",       "Criar alarme HH:MM desc"),
-        BotCommand("listar",       "Listar alarmes"),
-        BotCommand("remover",      "Remover alarme"),
-        BotCommand("spotify",      "Tocar no Spotify"),
-        BotCommand("pausar",       "Pausar música"),
-        BotCommand("continuar",    "Continuar música"),
-        BotCommand("proxima",      "Próxima faixa"),
-        BotCommand("youtube",      "Tocar no YouTube"),
-        BotCommand("abrir",        "Abrir aplicativo"),
-        BotCommand("bloquear",     "Bloquear tela"),
-        BotCommand("screenshot",   "Capturar tela"),
-        BotCommand("tela",         "Analisar tela"),
-        BotCommand("monitorar",    "Monitoramento contínuo"),
+        BotCommand("jarvis", "Enviar comando ao Jarvis"),
+        BotCommand("status", "Status do sistema"),
+        BotCommand("clima", "Clima atual"),
+        BotCommand("amanha", "Previsão amanhã"),
+        BotCommand("alarme", "Criar alarme HH:MM desc"),
+        BotCommand("listar", "Listar alarmes"),
+        BotCommand("remover", "Remover alarme"),
+        BotCommand("spotify", "Tocar no Spotify"),
+        BotCommand("pausar", "Pausar música"),
+        BotCommand("continuar", "Continuar música"),
+        BotCommand("proxima", "Próxima faixa"),
+        BotCommand("youtube", "Tocar no YouTube"),
+        BotCommand("abrir", "Abrir aplicativo"),
+        BotCommand("bloquear", "Bloquear tela"),
+        BotCommand("screenshot", "Capturar tela"),
+        BotCommand("tela", "Analisar tela"),
+        BotCommand("monitorar", "Monitoramento contínuo"),
         BotCommand("pararmonitor", "Parar monitoramento"),
-        BotCommand("tvligar",      "Ligar TV"),
-        BotCommand("tvdesligar",   "Desligar TV"),
-        BotCommand("volume",       "Ajustar volume"),
-        BotCommand("trabalho",     "Modo trabalho"),
-        BotCommand("ia",           "Trocar modelo IA"),
-        BotCommand("stop",         "Parar voz"),
-        BotCommand("ajuda",        "Lista de comandos"),
+        BotCommand("tvligar", "Ligar TV"),
+        BotCommand("tvdesligar", "Desligar TV"),
+        BotCommand("volume", "Ajustar volume"),
+        BotCommand("trabalho", "Modo trabalho"),
+        BotCommand("ia", "Trocar modelo IA"),
+        BotCommand("stop", "Parar voz"),
+        BotCommand("ajuda", "Lista de comandos"),
     ]
     await application.bot.set_my_commands(comandos)
 
 
-
-
-
-
-
 async def erro_telegram(update: Update, context: ContextTypes.DEFAULT_TYPE):
     from telegram.error import Conflict
+
     if isinstance(context.error, Conflict):
         print("TELEGRAM Conflito detectado. Tentando recuperar...")
     else:
         print(f"TELEGRAM Erro: {context.error}")
-
-
-
-
-
 
 
 def iniciar_telegram():
@@ -531,31 +378,31 @@ def iniciar_telegram():
     asyncio.set_event_loop(asyncio.new_event_loop())
     print("TELEGRAM Jarvis FULL iniciado")
     app = Application.builder().token(TOKEN).post_init(configurar_comandos).build()
-    app.add_handler(CommandHandler("jarvis",       cmd_jarvis))
-    app.add_handler(CommandHandler("status",       cmd_status))
-    app.add_handler(CommandHandler("clima",        cmd_clima))
-    app.add_handler(CommandHandler("amanha",       cmd_clima_amanha))
-    app.add_handler(CommandHandler("stop",         cmd_stop))
-    app.add_handler(CommandHandler("ajuda",        cmd_ajuda))
-    app.add_handler(CommandHandler("alarme",       cmd_alarme_add))
-    app.add_handler(CommandHandler("listar",       cmd_alarme_list))
-    app.add_handler(CommandHandler("remover",      cmd_alarme_remove))
-    app.add_handler(CommandHandler("spotify",      cmd_spotify))
-    app.add_handler(CommandHandler("pausar",       cmd_pausar))
-    app.add_handler(CommandHandler("continuar",    cmd_continuar))
-    app.add_handler(CommandHandler("proxima",      cmd_proxima))
-    app.add_handler(CommandHandler("youtube",      cmd_youtube))
-    app.add_handler(CommandHandler("abrir",        cmd_abrir))
-    app.add_handler(CommandHandler("bloquear",     cmd_bloquear))
-    app.add_handler(CommandHandler("screenshot",   cmd_screenshot))
-    app.add_handler(CommandHandler("trabalho",     cmd_trabalho))
-    app.add_handler(CommandHandler("volume",       cmd_volume))
-    app.add_handler(CommandHandler("tvligar",      cmd_tv_ligar))
-    app.add_handler(CommandHandler("tvdesligar",   cmd_tv_desligar))
-    app.add_handler(CommandHandler("tela",         cmd_tela))
-    app.add_handler(CommandHandler("monitorar",    cmd_monitorar))
+    app.add_handler(CommandHandler("jarvis", cmd_jarvis))
+    app.add_handler(CommandHandler("status", cmd_status))
+    app.add_handler(CommandHandler("clima", cmd_clima))
+    app.add_handler(CommandHandler("amanha", cmd_clima_amanha))
+    app.add_handler(CommandHandler("stop", cmd_stop))
+    app.add_handler(CommandHandler("ajuda", cmd_ajuda))
+    app.add_handler(CommandHandler("alarme", cmd_alarme_add))
+    app.add_handler(CommandHandler("listar", cmd_alarme_list))
+    app.add_handler(CommandHandler("remover", cmd_alarme_remove))
+    app.add_handler(CommandHandler("spotify", cmd_spotify))
+    app.add_handler(CommandHandler("pausar", cmd_pausar))
+    app.add_handler(CommandHandler("continuar", cmd_continuar))
+    app.add_handler(CommandHandler("proxima", cmd_proxima))
+    app.add_handler(CommandHandler("youtube", cmd_youtube))
+    app.add_handler(CommandHandler("abrir", cmd_abrir))
+    app.add_handler(CommandHandler("bloquear", cmd_bloquear))
+    app.add_handler(CommandHandler("screenshot", cmd_screenshot))
+    app.add_handler(CommandHandler("trabalho", cmd_trabalho))
+    app.add_handler(CommandHandler("volume", cmd_volume))
+    app.add_handler(CommandHandler("tvligar", cmd_tv_ligar))
+    app.add_handler(CommandHandler("tvdesligar", cmd_tv_desligar))
+    app.add_handler(CommandHandler("tela", cmd_tela))
+    app.add_handler(CommandHandler("monitorar", cmd_monitorar))
     app.add_handler(CommandHandler("pararmonitor", cmd_parar_monitor))
-    app.add_handler(CommandHandler("ia",           cmd_ia))
+    app.add_handler(CommandHandler("ia", cmd_ia))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, cmd_texto_livre))
     app.add_error_handler(erro_telegram)
     try:

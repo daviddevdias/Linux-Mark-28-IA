@@ -13,19 +13,23 @@ from typing import Any
 
 log = logging.getLogger("jarvis.memory_rag")
 
-DB_PATH   = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs", "rag_memory.db")
+DB_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "logs", "rag_memory.db"
+)
 MAX_CURTA = 20
 SCORE_MIN = 0.25
 
+
 @dataclass
 class MemoriaItem:
-    id:       int
-    tipo:     str
-    chave:    str
-    valor:    str
+    id: int
+    tipo: str
+    chave: str
+    valor: str
     contexto: str
-    score:    float = 0.0
-    ts:       float = 0.0
+    score: float = 0.0
+    ts: float = 0.0
+
 
 def conectar() -> sqlite3.Connection:
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
@@ -50,13 +54,16 @@ def conectar() -> sqlite3.Connection:
     c.commit()
     return c
 
-def normalizar_texto(texto: str) :
+
+def normalizar_texto(texto: str):
     t = unicodedata.normalize("NFD", texto.lower())
     t = "".join(c for c in t if unicodedata.category(c) != "Mn")
     return re.sub(r"\s+", " ", t).strip()
 
+
 def tokenizar(texto: str) -> set[str]:
     return set(re.findall(r"\b\w{3,}\b", normalizar_texto(texto)))
+
 
 def calcular_score(query_tokens: set[str], valor: str, contexto: str) -> float:
     item_tokens = tokenizar(valor) | tokenizar(contexto)
@@ -64,6 +71,7 @@ def calcular_score(query_tokens: set[str], valor: str, contexto: str) -> float:
         return 0.0
     intersecao = query_tokens & item_tokens
     return len(intersecao) / max(len(query_tokens), 1)
+
 
 class MemoriaRAG:
 
@@ -100,7 +108,9 @@ class MemoriaRAG:
         chave = hashlib.md5(comando.encode()).hexdigest()[:12]
         self.salvar("interacao", chave, resposta[:1000], contexto=comando[:300])
 
-    def buscar(self, query: str, tipo: str | None = None, limite: int = 5) -> list[MemoriaItem]:
+    def buscar(
+        self, query: str, tipo: str | None = None, limite: int = 5
+    ) -> list[MemoriaItem]:
         tokens = tokenizar(query)
         if not tokens:
             return []
@@ -112,11 +122,17 @@ class MemoriaRAG:
                 continue
             score = calcular_score(tokens, item["valor"], item.get("contexto", ""))
             if score >= SCORE_MIN:
-                resultados.append(MemoriaItem(
-                    id=0, tipo=item["tipo"], chave=item["chave"],
-                    valor=item["valor"], contexto=item.get("contexto", ""),
-                    score=score + 0.1, ts=item["ts"],
-                ))
+                resultados.append(
+                    MemoriaItem(
+                        id=0,
+                        tipo=item["tipo"],
+                        chave=item["chave"],
+                        valor=item["valor"],
+                        contexto=item.get("contexto", ""),
+                        score=score + 0.1,
+                        ts=item["ts"],
+                    )
+                )
 
         try:
             with conectar() as c:
@@ -130,12 +146,21 @@ class MemoriaRAG:
                 for row in rows:
                     score = calcular_score(tokens, row["valor"], row["contexto"] or "")
                     if score >= SCORE_MIN:
-                        resultados.append(MemoriaItem(
-                            id=row["id"], tipo=row["tipo"], chave=row["chave"],
-                            valor=row["valor"], contexto=row["contexto"] or "",
-                            score=score, ts=row["atualizado_em"],
-                        ))
-                        c.execute("UPDATE memoria SET acessos = acessos + 1 WHERE id=?", (row["id"],))
+                        resultados.append(
+                            MemoriaItem(
+                                id=row["id"],
+                                tipo=row["tipo"],
+                                chave=row["chave"],
+                                valor=row["valor"],
+                                contexto=row["contexto"] or "",
+                                score=score,
+                                ts=row["atualizado_em"],
+                            )
+                        )
+                        c.execute(
+                            "UPDATE memoria SET acessos = acessos + 1 WHERE id=?",
+                            (row["id"],),
+                        )
                 c.commit()
         except Exception as exc:
             log.error("RAG buscar: %s", exc)
@@ -151,12 +176,12 @@ class MemoriaRAG:
                 break
         return unicos
 
-    def contexto_para_prompt(self, query: str, max_chars: int = 800) :
+    def contexto_para_prompt(self, query: str, max_chars: int = 800):
         itens = self.buscar(query, limite=4)
         if not itens:
             return ""
         partes = []
-        total  = 0
+        total = 0
         for item in itens:
             trecho = f"[{item.tipo}] {item.chave}: {item.valor}"[:200]
             if total + len(trecho) > max_chars:
@@ -168,11 +193,12 @@ class MemoriaRAG:
     def salvar_preferencia(self, chave: str, valor: str):
         self.salvar("preferencia", chave, valor)
 
-    def get_preferencia(self, chave: str, default: str = "") :
+    def get_preferencia(self, chave: str, default: str = ""):
         try:
             with conectar() as c:
                 row = c.execute(
-                    "SELECT valor FROM memoria WHERE tipo='preferencia' AND chave=?", (chave,)
+                    "SELECT valor FROM memoria WHERE tipo='preferencia' AND chave=?",
+                    (chave,),
                 ).fetchone()
                 return row["valor"] if row else default
         except Exception:
@@ -183,11 +209,13 @@ class MemoriaRAG:
         try:
             with conectar() as c:
                 cur = c.execute(
-                    "DELETE FROM memoria WHERE tipo='interacao' AND atualizado_em < ?", (limite,)
+                    "DELETE FROM memoria WHERE tipo='interacao' AND atualizado_em < ?",
+                    (limite,),
                 )
                 c.commit()
                 return cur.rowcount
         except Exception:
             return 0
+
 
 rag = MemoriaRAG()

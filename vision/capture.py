@@ -41,6 +41,7 @@ SYSTEM_DICA = (
     '"resumo": "frase curta", "problema": "descrição se ok=false", "sugestao_rapida": "solução direta"}'
 )
 
+
 @dataclass
 class ResultadoAnalise:
     ok: bool = True
@@ -52,6 +53,7 @@ class ResultadoAnalise:
     img_b64: str = ""
     timestamp: float = field(default_factory=time.time)
 
+
 @dataclass
 class MonitorConfig:
     intervalo_s: float = 8.0
@@ -60,6 +62,7 @@ class MonitorConfig:
     cooldown_s: float = 45.0
     pergunta: str = "Analise esta tela. Há erros ou problemas visíveis?"
     callback: Optional[Callable] = None
+
 
 @dataclass
 class Estado:
@@ -73,9 +76,11 @@ class Estado:
     economizados: int = 0
     ultimo_alerta: float = 0.0
 
+
 estado = Estado()
 cfg_mon: Optional[MonitorConfig] = None
 task: Optional[asyncio.Task] = None
+
 
 def get_client() -> Optional[OpenAI]:
     global client
@@ -88,6 +93,7 @@ def get_client() -> Optional[OpenAI]:
 
     client = OpenAI(api_key=config.QWEN_API_KEY, base_url=config.BASE_URL)
     return client
+
 
 def capturar_frame_base64() -> Optional[str]:
     try:
@@ -106,8 +112,10 @@ def capturar_frame_base64() -> Optional[str]:
         log.error("Erro ao capturar tela: %s", e)
         return None
 
+
 def hash_frame(b64: str) -> str:
     return hashlib.md5(b64[:4096].encode()).hexdigest()
+
 
 def parse(raw: str, img_b64: str) -> ResultadoAnalise:
     try:
@@ -127,7 +135,10 @@ def parse(raw: str, img_b64: str) -> ResultadoAnalise:
             img_b64=img_b64,
         )
     except Exception:
-        tem_prob = any(k in raw.lower() for k in ["erro", "error", "falha", "crash", "travad", "exception"])
+        tem_prob = any(
+            k in raw.lower()
+            for k in ["erro", "error", "falha", "crash", "travad", "exception"]
+        )
         return ResultadoAnalise(
             ok=not tem_prob,
             tipo="erro" if tem_prob else "normal",
@@ -136,16 +147,23 @@ def parse(raw: str, img_b64: str) -> ResultadoAnalise:
             img_b64=img_b64,
         )
 
-def resultado_para_json(r: ResultadoAnalise) -> str:
-    return json.dumps({
-        "ok": r.ok,
-        "tipo": r.tipo,
-        "resumo": r.resumo,
-        "problema": r.problema,
-        "sugestao_rapida": r.sugestao_rapida,
-    }, ensure_ascii=False)
 
-async def chamar_qwen(system: str, pergunta: str, img_b64: str, max_tokens: int = 120) -> str:
+def resultado_para_json(r: ResultadoAnalise) -> str:
+    return json.dumps(
+        {
+            "ok": r.ok,
+            "tipo": r.tipo,
+            "resumo": r.resumo,
+            "problema": r.problema,
+            "sugestao_rapida": r.sugestao_rapida,
+        },
+        ensure_ascii=False,
+    )
+
+
+async def chamar_qwen(
+    system: str, pergunta: str, img_b64: str, max_tokens: int = 120
+) -> str:
     c = get_client()
     if not c:
         return '{"ok": false, "tipo": "erro", "resumo": "Cliente Qwen não configurado.", "problema": "QWEN_API_KEY ausente.", "sugestao_rapida": "Configure a chave na aba Settings."}'
@@ -158,23 +176,34 @@ async def chamar_qwen(system: str, pergunta: str, img_b64: str, max_tokens: int 
                 max_tokens=max_tokens,
                 messages=[
                     {"role": "system", "content": system},
-                    {"role": "user", "content": [
-                        {"type": "text", "text": pergunta},
-                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}},
-                    ]},
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": pergunta},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{img_b64}"
+                                },
+                            },
+                        ],
+                    },
                 ],
             ),
         )
         return resp.choices[0].message.content.strip()
     except Exception as e:
         log.exception("Qwen API erro: %s", e)
-        return json.dumps({
-            "ok": False,
-            "tipo": "erro",
-            "resumo": "Falha na chamada à API.",
-            "problema": str(e)[:120],
-            "sugestao_rapida": "Verifique a chave e conexão.",
-        })
+        return json.dumps(
+            {
+                "ok": False,
+                "tipo": "erro",
+                "resumo": "Falha na chamada à API.",
+                "problema": str(e)[:120],
+                "sugestao_rapida": "Verifique a chave e conexão.",
+            }
+        )
+
 
 async def analisar_tela(prompt: str) -> str:
     try:
@@ -183,13 +212,15 @@ async def analisar_tela(prompt: str) -> str:
         loop = asyncio.get_event_loop()
         img = await loop.run_in_executor(None, capturar_frame_base64)
         if not img:
-            return json.dumps({
-                "ok": False,
-                "tipo": "erro",
-                "resumo": "Falha ao capturar buffer óptico.",
-                "problema": "capturar_frame_base64 retornou None.",
-                "sugestao_rapida": "Verifique permissões de captura de tela.",
-            })
+            return json.dumps(
+                {
+                    "ok": False,
+                    "tipo": "erro",
+                    "resumo": "Falha ao capturar buffer óptico.",
+                    "problema": "capturar_frame_base64 retornou None.",
+                    "sugestao_rapida": "Verifique permissões de captura de tela.",
+                }
+            )
 
         print(f"[VISION] Analisando com prompt: {prompt[:50]}...")
 
@@ -198,19 +229,23 @@ async def analisar_tela(prompt: str) -> str:
         return resultado_para_json(resultado)
 
     except Exception as e:
-        return json.dumps({
-            "ok": False,
-            "tipo": "erro",
-            "resumo": f"Erro na análise neural: {str(e)[:80]}",
-            "problema": str(e),
-            "sugestao_rapida": "Verifique os logs do sistema.",
-        })
+        return json.dumps(
+            {
+                "ok": False,
+                "tipo": "erro",
+                "resumo": f"Erro na análise neural: {str(e)[:80]}",
+                "problema": str(e),
+                "sugestao_rapida": "Verifique os logs do sistema.",
+            }
+        )
+
 
 async def gerar_dica_profunda(img_b64: str, problema: str, tipo: str) -> str:
     prompt = f"Tipo: {tipo}.\nProblema: {problema}\nAnalise e diga o que fazer."
     raw = await chamar_qwen(SYSTEM_DICA, prompt, img_b64, max_tokens=200)
     resultado = parse(raw, img_b64)
     return resultado.sugestao_rapida or resultado.resumo
+
 
 async def loop_monitor():
     loop = asyncio.get_event_loop()
@@ -228,7 +263,9 @@ async def loop_monitor():
                 estado.ultimo_hash = h
                 estado.chamadas_api += 1
 
-                raw = await chamar_qwen(SYSTEM_RAPIDO, cfg_mon.pergunta, img, max_tokens=150)
+                raw = await chamar_qwen(
+                    SYSTEM_RAPIDO, cfg_mon.pergunta, img, max_tokens=150
+                )
                 resultado = parse(raw, img)
                 estado.ultima_analise = resultado.resumo
                 estado.ultimo_resultado = resultado
@@ -248,6 +285,7 @@ async def loop_monitor():
                 if cfg_mon.callback:
                     try:
                         import inspect
+
                         if inspect.iscoroutinefunction(cfg_mon.callback):
                             asyncio.create_task(cfg_mon.callback(resultado))
                         else:
@@ -260,6 +298,7 @@ async def loop_monitor():
             estado.economizados += 1
 
         await asyncio.sleep(max(0.5, cfg_mon.intervalo_s - (time.monotonic() - t0)))
+
 
 async def iniciar_monitor(cfg: Optional[MonitorConfig] = None) -> bool:
     global estado, cfg_mon, task
@@ -275,6 +314,7 @@ async def iniciar_monitor(cfg: Optional[MonitorConfig] = None) -> bool:
     estado = Estado(rodando=True)
     task = asyncio.get_event_loop().create_task(loop_monitor())
     return True
+
 
 def parar_monitor() -> dict:
     global estado, task
@@ -292,6 +332,7 @@ def parar_monitor() -> dict:
         "economizados": estado.economizados,
         "ultima_analise": estado.ultima_analise,
     }
+
 
 def status_monitor() -> dict:
     return {

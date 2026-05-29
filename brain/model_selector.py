@@ -7,22 +7,34 @@ from enum import Enum
 
 log = logging.getLogger("jarvis.model_selector")
 
+
 class NivelModelo(Enum):
-    RAPIDO        = "rapido"
+    RAPIDO = "rapido"
     INTERMEDIARIO = "intermediario"
-    PESADO        = "pesado"
+    PESADO = "pesado"
+
 
 @dataclass
 class PerfilModelo:
-    nome:          str
-    nivel:         NivelModelo
-    max_tokens:    int
+    nome: str
+    nivel: NivelModelo
+    max_tokens: int
     adequado_para: list[str]
 
+
 PERFIS: dict[str, PerfilModelo] = {
-    "phi3":             PerfilModelo("phi3",             NivelModelo.RAPIDO,        512,  ["saudacao", "comando_simples", "status"]),
-    "llama3":           PerfilModelo("llama3",           NivelModelo.INTERMEDIARIO, 1024, ["busca", "clima", "spotify", "app"]),
-    "qwen/qwen2.5-vl-72b-instruct": PerfilModelo("qwen/qwen2.5-vl-72b-instruct", NivelModelo.PESADO,        2048, ["visao", "codigo", "plano", "analise", "agente"]),
+    "phi3": PerfilModelo(
+        "phi3", NivelModelo.RAPIDO, 512, ["saudacao", "comando_simples", "status"]
+    ),
+    "llama3": PerfilModelo(
+        "llama3", NivelModelo.INTERMEDIARIO, 1024, ["busca", "clima", "spotify", "app"]
+    ),
+    "qwen/qwen2.5-vl-72b-instruct": PerfilModelo(
+        "qwen/qwen2.5-vl-72b-instruct",
+        NivelModelo.PESADO,
+        2048,
+        ["visao", "codigo", "plano", "analise", "agente"],
+    ),
 }
 
 RAPIDO_REGEX = re.compile(
@@ -40,9 +52,11 @@ VISAO_REGEX = re.compile(
     re.IGNORECASE,
 )
 
+
 def modelos_ollama() -> set[str]:
     try:
         import requests
+
         r = requests.get("http://127.0.0.1:11434/api/tags", timeout=1)
         if r.status_code == 200:
             return {m["name"] for m in r.json().get("models", [])}
@@ -51,6 +65,7 @@ def modelos_ollama() -> set[str]:
         pass
     return set()
 
+
 def modelo_rapido(modelos: set[str]):
     for c in ("phi3:mini", "phi3", "llama3:8b", "llama3"):
         if c in modelos:
@@ -58,12 +73,15 @@ def modelo_rapido(modelos: set[str]):
 
     return None
 
+
 def modelo_atual():
     try:
         from engine.ia_router import modelo as m
+
         return m or "qwen/qwen2.5-vl-72b-instruct"
     except Exception:
         return "qwen/qwen2.5-vl-72b-instruct"
+
 
 def complexidade_heuristica(comando: str) -> float:
     palavras = comando.split()
@@ -72,15 +90,18 @@ def complexidade_heuristica(comando: str) -> float:
         return 0.0
 
     comprimento_score = min(n / 20, 1.0)
-    densidade_score   = len(set(palavras)) / n
-    punct_score       = min(comando.count(",") / 3, 1.0)
+    densidade_score = len(set(palavras)) / n
+    punct_score = min(comando.count(",") / 3, 1.0)
 
-    return round((comprimento_score * 0.5 + densidade_score * 0.3 + punct_score * 0.2), 3)
+    return round(
+        (comprimento_score * 0.5 + densidade_score * 0.3 + punct_score * 0.2), 3
+    )
+
 
 def escolher_modelo(contexto: dict):
-    comando       = contexto.get("comando", "")
-    tem_imagem    = bool(contexto.get("imagem"))
-    forcado       = contexto.get("modelo_forcado", "")
+    comando = contexto.get("comando", "")
+    tem_imagem = bool(contexto.get("imagem"))
+    forcado = contexto.get("modelo_forcado", "")
     historico_len = contexto.get("historico_len", 0)
 
     if forcado and forcado in PERFIS:
@@ -102,6 +123,7 @@ def escolher_modelo(contexto: dict):
             return rapido
 
     return modelo_atual()
+
 
 def nivel_do_modelo(nome: str) -> NivelModelo:
     if nome in PERFIS:

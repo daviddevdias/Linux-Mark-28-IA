@@ -8,10 +8,11 @@ from typing import AsyncIterator, Callable
 log = logging.getLogger("jarvis.tts")
 
 SEPARADORES = re.compile(r"(?<=[.!?;:])\s+|(?<=,)\s{2,}")
-MIN_CHUNK   = 20
+MIN_CHUNK = 20
+
 
 def segmentar(texto: str) -> list[str]:
-    partes    = SEPARADORES.split(texto.strip())
+    partes = SEPARADORES.split(texto.strip())
     resultado: list[str] = []
     acumulado = ""
     for parte in partes:
@@ -29,13 +30,14 @@ def segmentar(texto: str) -> list[str]:
 
     return resultado or [texto]
 
+
 class FilaTTS:
 
     def __init__(self):
-        self.fila:    asyncio.Queue[str | None] = asyncio.Queue(maxsize=20)
-        self.rodando: bool                      = False
-        self.task:    asyncio.Task | None       = None
-        self.falar:   Callable | None           = None
+        self.fila: asyncio.Queue[str | None] = asyncio.Queue(maxsize=20)
+        self.rodando: bool = False
+        self.task: asyncio.Task | None = None
+        self.falar: Callable | None = None
 
     def registrar_falar(self, fn: Callable):
         self.falar = fn
@@ -45,7 +47,7 @@ class FilaTTS:
             return
 
         self.rodando = True
-        self.task    = asyncio.create_task(self.consumidor())
+        self.task = asyncio.create_task(self.consumidor())
 
     def limpar_fila(self):
         while not self.fila.empty():
@@ -95,15 +97,16 @@ class FilaTTS:
 
             self.fila.task_done()
 
+
 async def falar_streaming(gerador: AsyncIterator[str], falar_fn: Callable) -> str:
     fila_tts.registrar_falar(falar_fn)
     if not fila_tts.rodando:
         await fila_tts.iniciar()
 
-    buffer     = ""
+    buffer = ""
     texto_full = ""
     async for token in gerador:
-        buffer     += token
+        buffer += token
         texto_full += token
         if any(buffer.endswith(s) for s in (".", "!", "?", ";", ":")):
             seg = buffer.strip()
@@ -115,5 +118,6 @@ async def falar_streaming(gerador: AsyncIterator[str], falar_fn: Callable) -> st
         await fila_tts.enfileirar(buffer.strip())
 
     return texto_full
+
 
 fila_tts = FilaTTS()

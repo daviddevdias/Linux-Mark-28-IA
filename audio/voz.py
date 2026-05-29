@@ -14,24 +14,16 @@ import re
 import tempfile
 from typing import Optional
 
-
-
-
 audio_io_lock = threading.RLock()
 
 mic_lock = threading.Lock()
-
 
 
 mic_cmd: queue.Queue = queue.Queue()
 mic_rpy: queue.Queue = queue.Queue()
 
 
-
 mic_thread: threading.Thread | None = None
-
-
-
 
 
 sleep_event = threading.Event()
@@ -41,12 +33,8 @@ barge_stop_event = threading.Event()
 barge_thread: threading.Thread | None = None
 
 
-
-
-
 def criar_reconhecedor() -> sr.Recognizer:
     r = sr.Recognizer()
-
 
     r.pause_threshold = 0.55
     r.non_speaking_duration = 0.25
@@ -64,8 +52,6 @@ _whisper_lock = threading.Lock()
 
 def get_whisper_model():
 
-
-
     global _whisper_model
     if _whisper_model is not None:
         return _whisper_model
@@ -74,10 +60,12 @@ def get_whisper_model():
         if _whisper_model is not None:
             return _whisper_model
         try:
-            from faster_whisper import WhisperModel  
+            from faster_whisper import WhisperModel
 
             nome_modelo = getattr(config, "WHISPER_MODEL", "") or "small"
-            _whisper_model = WhisperModel(nome_modelo, device="cpu", compute_type="int8")
+            _whisper_model = WhisperModel(
+                nome_modelo, device="cpu", compute_type="int8"
+            )
             return _whisper_model
         except Exception:
             return None
@@ -85,14 +73,9 @@ def get_whisper_model():
 
 def limpar_texto_stt(texto: str) -> str:
 
-
-
-
     t = (texto or "").strip().lower()
     if not t:
         return ""
-
-
 
     t = re.sub(r"[^\w\s]", " ", t, flags=re.UNICODE)
     t = re.sub(r"\s+", " ", t).strip()
@@ -133,11 +116,6 @@ def reconhecer_whisper(audio: sr.AudioData) -> str:
                 pass
 
 
-
-
-
-
-
 def suspender_pygame_mixer_para_capture():
     try:
         if pygame.mixer.get_init():
@@ -151,11 +129,6 @@ def suspender_pygame_mixer_para_capture():
         pass
 
 
-
-
-
-
-
 def normalizar_indice_microfone(idx):
     try:
         return int(idx) if idx is not None and int(idx) >= 0 else None
@@ -163,21 +136,11 @@ def normalizar_indice_microfone(idx):
         return None
 
 
-
-
-
-
-
 def ui_falar(on, vol=1.0):
     try:
         config.notificar_voz_painel(on, vol)
     except Exception:
         pass
-
-
-
-
-
 
 
 def interromper_voz():
@@ -195,13 +158,7 @@ def interromper_voz():
         pass
 
 
-
-
-
-
-
 def barge_loop():
-
 
     idx = normalizar_indice_microfone(getattr(config, "DEVICE_INDEX", None))
     rec = criar_reconhecedor()
@@ -212,13 +169,12 @@ def barge_loop():
     if idx is not None:
         kwargs["device_index"] = idx
 
-
     if not mic_lock.acquire(timeout=2.0):
         return
 
     try:
         with sr.Microphone(**kwargs) as source:
-            mic_lock.release()         
+            mic_lock.release()
             try:
                 rec.adjust_for_ambient_noise(source, duration=0.15)
             except Exception:
@@ -230,7 +186,9 @@ def barge_loop():
                 try:
                     audio = rec.listen(source, timeout=0.6, phrase_time_limit=1.5)
                     try:
-                        txt = limpar_texto_stt(rec.recognize_google(audio, language="pt-BR"))
+                        txt = limpar_texto_stt(
+                            rec.recognize_google(audio, language="pt-BR")
+                        )
                     except Exception:
                         txt = ""
                     if txt:
@@ -248,11 +206,6 @@ def barge_loop():
             pass
 
 
-
-
-
-
-
 def iniciar_listener_interrupcao():
     global barge_thread
 
@@ -265,18 +218,8 @@ def iniciar_listener_interrupcao():
     barge_thread.start()
 
 
-
-
-
-
-
 def parar_listener_interrupcao():
     barge_stop_event.set()
-
-
-
-
-
 
 
 def reproduzir_sync(arquivo):
@@ -316,11 +259,6 @@ def reproduzir_sync(arquivo):
     ui_falar(False)
 
 
-
-
-
-
-
 async def falar(texto):
     if not texto.strip():
         return
@@ -345,17 +283,11 @@ async def falar(texto):
     await loop.run_in_executor(None, reproduzir_sync, arquivo)
 
 
-
-
-
-
-
 def captura_sync():
     idx = normalizar_indice_microfone(getattr(config, "DEVICE_INDEX", None))
 
     with audio_io_lock:
         suspender_pygame_mixer_para_capture()
-
 
     parar_listener_interrupcao()
     if barge_thread and barge_thread.is_alive():
@@ -387,17 +319,12 @@ def captura_sync():
         if not texto:
             texto = limpar_texto_stt(reconhecer_whisper(audio))
 
-        print(f"ouvido: {texto}")
+        print(f"{texto}")
         return texto
 
     except Exception as e:
         print(f"Erro na captura: {e}")
         return ""
-
-
-
-
-
 
 
 def run_mic_loop():
@@ -410,11 +337,6 @@ def run_mic_loop():
             time.sleep(1)
 
 
-
-
-
-
-
 def ensure_mic_thread():
     global mic_thread
 
@@ -423,11 +345,6 @@ def ensure_mic_thread():
 
     mic_thread = threading.Thread(target=run_mic_loop, daemon=True)
     mic_thread.start()
-
-
-
-
-
 
 
 def ouvir_sync_queued():
@@ -441,11 +358,8 @@ def ouvir_sync_queued():
         return ""
 
 
-
-
 def listar_microfones() -> list:
-    """Lista microfones disponíveis de forma segura, respeitando o mic_lock
-    para evitar acesso concorrente ao PyAudio (causa access violation no Windows)."""
+
     acquired = mic_lock.acquire(timeout=5.0)
     if not acquired:
 
@@ -457,7 +371,6 @@ def listar_microfones() -> list:
         return []
     finally:
         mic_lock.release()
-
 
 
 async def ouvir_comando():

@@ -16,11 +16,6 @@ _PENDING_AUTH: dict[int, float] = {}
 _AUTH_TTL = 300
 
 
-
-
-
-
-
 def carregar_config():
     global _ALLOWED_IDS, _AUTH_TOKEN
     ids_raw = os.environ.get("TELEGRAM_ALLOWED_IDS", "")
@@ -31,10 +26,13 @@ def carregar_config():
                 _ALLOWED_IDS.add(int(part))
     try:
         import config as cfg
+
         ids_cfg = getattr(cfg, "TELEGRAM_ALLOWED_IDS", [])
         if isinstance(ids_cfg, (list, set, tuple)):
             _ALLOWED_IDS.update(int(i) for i in ids_cfg if str(i).isdigit())
-        token = getattr(cfg, "TELEGRAM_AUTH_TOKEN", "") or os.environ.get("TELEGRAM_AUTH_TOKEN", "")
+        token = getattr(cfg, "TELEGRAM_AUTH_TOKEN", "") or os.environ.get(
+            "TELEGRAM_AUTH_TOKEN", ""
+        )
         if token:
             _AUTH_TOKEN = token
     except Exception:
@@ -46,29 +44,14 @@ def carregar_config():
         )
 
 
-
-
-
-
-
 def adicionar_id_autorizado(chat_id: int):
     _ALLOWED_IDS.add(chat_id)
-
-
-
-
-
 
 
 def e_autorizado(chat_id: int) -> bool:
     if not _ALLOWED_IDS:
         return False
     return chat_id in _ALLOWED_IDS
-
-
-
-
-
 
 
 def verificar_token(token_fornecido: str) -> bool:
@@ -80,18 +63,8 @@ def verificar_token(token_fornecido: str) -> bool:
     )
 
 
-
-
-
-
-
 def marcar_pendente_auth(chat_id: int):
     _PENDING_AUTH[chat_id] = time.time()
-
-
-
-
-
 
 
 def esta_pendente_auth(chat_id: int) -> bool:
@@ -104,18 +77,8 @@ def esta_pendente_auth(chat_id: int) -> bool:
     return True
 
 
-
-
-
-
-
 def limpar_pendente(chat_id: int):
     _PENDING_AUTH.pop(chat_id, None)
-
-
-
-
-
 
 
 def requer_autorizacao(fn: Callable) -> Callable:
@@ -142,12 +105,8 @@ def requer_autorizacao(fn: Callable) -> Callable:
             "Acesso restrito. Envie o token de autenticação para continuar."
         )
         return
+
     return wrapper
-
-
-
-
-
 
 
 carregar_config()

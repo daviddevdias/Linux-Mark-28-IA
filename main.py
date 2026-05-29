@@ -6,31 +6,41 @@ import faulthandler
 
 faulthandler.enable()
 
-os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "hide")
-os.environ["QT_LOGGING_RULES"]           = "qt.qpa.window=false"
-os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--disable-logging --disable-gpu --no-sandbox"
+os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
+os.environ["QT_LOGGING_RULES"] = "qt.qpa.window=false"
+
+chromium_flags = (
+    "--disable-logging "
+    "--disable-gpu "
+    "--no-sandbox "
+    "--disable-software-rasterizer "
+    "--disable-dev-shm-usage "
+    "--log-level=3"
+)
+
+os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = chromium_flags
 
 import asyncio
 import logging
 import threading
 
-from PyQt6.QtCore    import Qt
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication
 
 import config
-from painel            import PainelCore, set_loop
-from audio.voz         import ouvir_comando, falar
-from engine.core       import processar_comando, inicializar_ia
+from painel import PainelCore, set_loop
+from audio.voz import ouvir_comando, falar
+from engine.core import processar_comando, inicializar_ia
 from engine.controller import get_shutdown_event
 from storage.memory_bridge import sincronizar_config
-from tasks.monitor     import iniciar_sentinela, registrar_falar, registrar_loop_monitor_voz
-from tasks.alarm       import (
+from tasks.monitor import iniciar_sentinela, registrar_falar, registrar_loop_monitor_voz
+from tasks.alarm import (
     iniciar_sistema_alarmes,
     registrar_falar_alarme,
     registrar_loop_alarme,
 )
-from app_ul.interface  import JarvisUI
-from storage.wake      import processar_wake, resposta_ativacao_aleatoria
+from app_ul.interface import JarvisUI
+from storage.wake import processar_wake, resposta_ativacao_aleatoria
 from integrations.telegram_bridge_auth_patch import iniciar_telegram
 
 QApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
@@ -58,7 +68,8 @@ async def _engine_loop(ui: PainelCore):
 
     try:
         from brain.event_bus import bus
-        from brain.watchdog  import watchdog, registrar_modulos_padrao
+        from brain.watchdog import watchdog, registrar_modulos_padrao
+
         bus.registrar_loop(asyncio.get_running_loop())
         registrar_modulos_padrao()
         watchdog.iniciar()
@@ -67,8 +78,11 @@ async def _engine_loop(ui: PainelCore):
 
     try:
         from storage.observability import registrar_acao, purgar_antigos
+
         purgar_antigos(dias=7)
-        registrar_acao("startup", modulo="main", descricao="Jarvis inicializado", sucesso=True)
+        registrar_acao(
+            "startup", modulo="main", descricao="Jarvis inicializado", sucesso=True
+        )
     except Exception as exc:
         log.warning("observability indisponível: %s", exc)
 
@@ -107,16 +121,14 @@ def _engine_thread(ui: PainelCore):
 
 
 def iniciar_sistema():
-    ui  = PainelCore()
+    ui = PainelCore()
     hud = JarvisUI()
 
     try:
         hud.btn_code.clicked.disconnect()
     except TypeError:
         pass
-    hud.btn_code.clicked.connect(
-        lambda: (ui.show(), ui.raise_(), ui.activateWindow())
-    )
+    hud.btn_code.clicked.connect(lambda: (ui.show(), ui.raise_(), ui.activateWindow()))
     hud.show()
 
     registrar_falar(falar)
