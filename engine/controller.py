@@ -844,8 +844,10 @@ async def processar_diretriz(texto: str) -> Optional[str]:
     cmd = normalizar(texto)
     from tasks import weather as wx
 
+    # Passa o texto NORMALIZADO para menciona_clima (sem acentos, minúsculo)
+    # e o texto ORIGINAL para extrair_cidade_do_utterance (preserva acentos)
     if wx.menciona_clima(cmd):
-        cidade = wx.extrair_cidade_do_utterance(texto)
+        cidade = wx.extrair_cidade_do_utterance(texto)  # texto original
         if "amanh" in cmd:
             return wx.verificar_chuva_amanha(cidade)
         return wx.obter_previsao_hoje(cidade)

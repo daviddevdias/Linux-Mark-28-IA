@@ -15,7 +15,7 @@ from telegram.ext import (
 from engine.controller import processar_diretriz
 from engine.ia_router import router
 from storage.memory_manager import get_nome
-from tasks.alarm import adicionar_alarme, listar_alarmes, remover_alarme
+from tasks.alarm import gerenciador_alarmes
 from tasks.weather import obter_previsao_hoje, verificar_chuva_amanha
 from audio.voz import falar, interromper_voz
 import config
@@ -124,13 +124,13 @@ async def cmd_alarme_add(update: Update, context: ContextTypes.DEFAULT_TYPE):
         data_arg = args.pop(0)
     hora = args[0]
     missao = " ".join(args[1:])
-    resposta = adicionar_alarme(hora, missao, data=data_arg)
+    resposta = gerenciador_alarmes.adicionar_alarme(hora, missao, data=data_arg)
     await responder_e_falar(update, resposta)
 
 
 @requer_autorizacao
 async def cmd_alarme_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    alarmes = listar_alarmes()
+    alarmes = gerenciador_alarmes.listar_alarmes()
     if not alarmes:
         await update.message.reply_text("Nenhum alarme ativo.")
         return
@@ -148,7 +148,7 @@ async def cmd_alarme_remove(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     hora = context.args[0]
     missao = " ".join(context.args[1:])
-    resposta = remover_alarme(hora, missao)
+    resposta = gerenciador_alarmes.remover_alarme(hora, missao)
     await responder_e_falar(update, resposta)
 
 

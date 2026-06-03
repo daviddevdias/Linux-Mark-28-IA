@@ -74,12 +74,27 @@ def menciona_clima(texto_normalizado: str) -> bool:
     n = texto_normalizado
     if not n:
         return False
-    if any(x in n for x in ("clima", "previsao", "temperatura", "meteorolog", "chuvisco")):
-        return True
-    if "do tempo" in n or "o tempo" in n or "tempo hoje" in n or "tempo amanh" in n:
-        return True
-    if "chuva" in n and ("amanh" in n or "hoje" in n or "clima" in n or "previs" in n):
-        return True
+    # Aceita tanto texto com acentos quanto normalizado (sem acentos)
+    # pois controller.py passa o texto já normalizado via normalizar()
+    if any(x in n for x in (
+        "clima", "previsao", "previsão", "temperatura",
+        "meteorolog", "chuvisco", "chuva", "tempo",
+    )):
+        # evita falsos positivos com "tempo" isolado (ex: "quanto tempo")
+        palavras_clima = (
+            "clima", "previsao", "previsão", "temperatura",
+            "meteorolog", "chuvisco",
+        )
+        if any(x in n for x in palavras_clima):
+            return True
+        # "tempo" só conta com contexto de clima
+        if "tempo" in n and any(x in n for x in (
+            "hoje", "amanha", "amanh", "semana", "chuva", "faz", "esta", "vai"
+        )):
+            return True
+        # "chuva" com qualquer contexto
+        if "chuva" in n:
+            return True
     return False
 
 def extrair_cidade_do_utterance(texto: str) -> str:

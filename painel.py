@@ -394,54 +394,61 @@ class JarvisBridge(QObject):
     @pyqtSlot(result=str)
     def obter_alarmes(self) -> str:
         try:
-            from tasks import alarm
-
-            return json.dumps(alarm.carregar_alarmes())
+            from tasks.alarm import carregar_alarmes
+            return json.dumps(carregar_alarmes())
         except Exception:
             return "[]"
 
     @pyqtSlot(str)
     def salvar_alarme(self, dados_json: str):
         try:
-            from tasks import alarm
-
+            from tasks.alarm import gerenciador_alarmes
             alarme = json.loads(dados_json)
-            alarmes = alarm.carregar_alarmes()
-            alarmes.append(alarme)
-            alarm.salvar_alarmes(alarmes)
-            if alarm.falar_callback and alarm.alarm_loop_ativo:
+            # Usa o método da classe para garantir status e campos corretos
+            gerenciador_alarmes.adicionar_alarme(
+                hora=alarme.get("hora", ""),
+                missao=alarme.get("missao", "Alarme"),
+                repetir=alarme.get("repetir", False),
+                musica=alarme.get("musica", ""),
+                data=alarme.get("data") or None,
+                dias_semana=alarme.get("dias_semana") or None,
+            )
+            cb = gerenciador_alarmes.falar_callback
+            loop = gerenciador_alarmes.alarm_loop_ativo
+            if cb and loop and not loop.is_closed():
                 asyncio.run_coroutine_threadsafe(
-                    alarm.falar_callback("Senhor, despertador configurado."),
-                    alarm.alarm_loop_ativo,
+                    cb("Senhor, despertador configurado."), loop
                 )
-        except Exception:
-            pass
+        except Exception as e:
+            import logging
+            logging.getLogger("painel").error("Erro ao salvar alarme: %s", e)
 
     @pyqtSlot(str)
     def remover_alarme(self, dados_json: str):
         try:
-            from tasks import alarm
-
+            from tasks.alarm import gerenciador_alarmes
             req = json.loads(dados_json)
-            alarm.remover_alarme(req.get("hora"), req.get("missao"), req.get("data"))
-        except Exception:
-            pass
+            hora = (req.get("hora") or "").strip()
+            missao = (req.get("missao") or "").strip()
+            data = req.get("data") or None
+            gerenciador_alarmes.remover_alarme(hora, missao, data)
+        except Exception as e:
+            import logging
+            logging.getLogger("painel").error("Erro ao remover alarme: %s", e)
 
     @pyqtSlot()
     def parar_alarme(self):
         try:
-            from tasks import alarm
-
-            alarm.parar_alarme_total()
+            from tasks.alarm import gerenciador_alarmes
+            gerenciador_alarmes.parar_alarme_total()
         except Exception:
             pass
 
     @pyqtSlot()
     def limpar_alarmes_concluidos(self):
         try:
-            from tasks import alarm
-
-            alarm.limpar_alarmes_concluidos()
+            from tasks.alarm import gerenciador_alarmes
+            gerenciador_alarmes.limpar_alarmes_concluidos()
         except Exception:
             pass
 

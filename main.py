@@ -34,11 +34,7 @@ from engine.core import processar_comando, inicializar_ia
 from engine.controller import get_shutdown_event
 from storage.memory_bridge import sincronizar_config
 from tasks.monitor import iniciar_sentinela, registrar_falar, registrar_loop_monitor_voz
-from tasks.alarm import (
-    iniciar_sistema_alarmes,
-    registrar_falar_alarme,
-    registrar_loop_alarme,
-)
+from tasks.alarm import iniciar_sistema_alarmes, gerenciador_alarmes
 from app_ul.interface import JarvisUI
 from storage.wake import processar_wake, resposta_ativacao_aleatoria
 from integrations.telegram_bridge_auth_patch import iniciar_telegram
@@ -112,7 +108,7 @@ def _engine_thread(ui: PainelCore):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     set_loop(loop)
-    registrar_loop_alarme(loop)
+    gerenciador_alarmes.registrar_callbacks(falar, loop)
     registrar_loop_monitor_voz(loop)
     try:
         loop.run_until_complete(_engine_loop(ui))
@@ -132,7 +128,6 @@ def iniciar_sistema():
     hud.show()
 
     registrar_falar(falar)
-    registrar_falar_alarme(falar)
 
     threading.Thread(
         target=_engine_thread,

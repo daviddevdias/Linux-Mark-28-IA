@@ -5,14 +5,13 @@ import json
 import logging
 import threading
 import time
-from dataclasses import dataclass, field
 from typing import Any, Optional, Dict
 
 from audio.voz import falar
 from engine.controller import processar_diretriz
 from engine.ia_router import detectar_modelo, desligar_monitor, info_monitor, router
 from storage.memory_manager import get_nome, load_memory, process_memory_logic
-from tasks.alarm import alarme_ativo, parar_alarme_total
+from tasks.alarm import gerenciador_alarmes
 
 from vision.capture import (
     MonitorConfig,
@@ -42,7 +41,6 @@ ALERTAS: Dict[str, str] = {
 
 
 class UIBridgeManager:
-
     def __init__(self):
         self._bridge = None
 
@@ -58,7 +56,6 @@ class UIBridgeManager:
 
 
 class MonitorState:
-
     def __init__(self):
         self.aguardando_confirmacao: bool = False
         self.ultima_analise_obj: Optional[ResultadoAnalise] = None
@@ -77,7 +74,6 @@ class MonitorState:
 
 
 class SystemOrchestrator:
-
     def __init__(self, ui_manager: UIBridgeManager, state: MonitorState):
         self.ui = ui_manager
         self.state = state
@@ -264,10 +260,10 @@ class SystemOrchestrator:
         ts_inicio = time.time()
         cmd_lower = comando.lower().strip()
 
-        if alarme_ativo and any(
+        if gerenciador_alarmes.alarme_ativo and any(
             p in cmd_lower for p in ("parar", "desligar", "acordei", "chega", "ok")
         ):
-            msg = parar_alarme_total()
+            msg = gerenciador_alarmes.parar_alarme_total()
             await falar(msg)
             return msg
 
