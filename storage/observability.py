@@ -1,48 +1,25 @@
 from __future__ import annotations
+import json, logging, sqlite3, time
+from pathlib import Path
 
-import json
-import logging
-import os
-import sqlite3
-import time
-from dataclasses import dataclass, field, asdict
-from typing import Any
-
-_DB_PATH = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "logs", "observability.db"
-)
 log = logging.getLogger("jarvis.obs")
+DB_PATH = Path(__file__).parent / "logs" / "observability.db"
 
 
 def conectar_banco() -> sqlite3.Connection:
-    os.makedirs(os.path.dirname(_DB_PATH), exist_ok=True)
-    c = sqlite3.connect(_DB_PATH, check_same_thread=False, timeout=5)
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    c = sqlite3.connect(DB_PATH, check_same_thread=False, timeout=5)
     c.execute("PRAGMA journal_mode=WAL;")
     c.execute("PRAGMA synchronous=NORMAL;")
     c.row_factory = sqlite3.Row
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS acoes (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            ts          REAL    NOT NULL,
-            tipo        TEXT    NOT NULL,
-            modulo      TEXT    DEFAULT '',
-            descricao   TEXT    DEFAULT '',
-            duracao_ms  INTEGER DEFAULT 0,
-            sucesso     INTEGER DEFAULT 1,
-            dados_json  TEXT    DEFAULT '{}'
-        )
-    """)
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS metricas (
-            id      INTEGER PRIMARY KEY AUTOINCREMENT,
-            ts      REAL    NOT NULL,
-            nome    TEXT    NOT NULL,
-            valor   REAL    NOT NULL,
-            unidade TEXT    DEFAULT ''
-        )
-    """)
+    c.execute(
+        "CREATE TABLE IF NOT EXISTS acoes (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, tipo TEXT NOT NULL, modulo TEXT DEFAULT '', descricao TEXT DEFAULT '', duracao_ms INTEGER DEFAULT 0, sucesso INTEGER DEFAULT 1, dados_json TEXT DEFAULT '{}')"
+    )
+    c.execute(
+        "CREATE TABLE IF NOT EXISTS metricas (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, nome TEXT NOT NULL, valor REAL NOT NULL, unidade TEXT DEFAULT '')"
+    )
     c.execute("CREATE INDEX IF NOT EXISTS idx_acoes_tipo ON acoes(tipo)")
-    c.execute("CREATE INDEX IF NOT EXISTS idx_acoes_ts   ON acoes(ts)")
+    c.execute("CREATE INDEX IF NOT EXISTS idx_acoes_ts ON acoes(ts)")
     c.execute("CREATE INDEX IF NOT EXISTS idx_metricas_nome ON metricas(nome)")
     c.commit()
     return c
@@ -59,8 +36,7 @@ def registrar_acao(
     try:
         with conectar_banco() as c:
             c.execute(
-                "INSERT INTO acoes (ts, tipo, modulo, descricao, duracao_ms, sucesso, dados_json) "
-                "VALUES (?,?,?,?,?,?,?)",
+                "INSERT INTO acoes (ts, tipo, modulo, descricao, duracao_ms, sucesso, dados_json) VALUES (?,?,?,?,?,?,?)",
                 (
                     time.time(),
                     tipo,
@@ -89,12 +65,13 @@ def registrar_metrica(nome: str, valor: float, unidade: str = ""):
 
 
 class Temporizador:
-
     def __init__(self, tipo: str, modulo: str = "", dados: dict | None = None):
-        self._tipo = tipo
-        self._modulo = modulo
-        self._dados = dados or {}
-        self._inicio = 0.0
+        self._tipo, self._modulo, self._dados, self._inicio = (
+            tipo,
+            modulo,
+            dados or {},
+            0.0,
+        )
 
     def __enter__(self) -> "Temporizador":
         self._inicio = time.time()
@@ -102,12 +79,11 @@ class Temporizador:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         duracao_ms = int((time.time() - self._inicio) * 1000)
-        sucesso = exc_type is None
         registrar_acao(
             tipo=self._tipo,
             modulo=self._modulo,
             duracao_ms=duracao_ms,
-            sucesso=sucesso,
+            sucesso=exc_type is None,
             dados=self._dados,
         )
         registrar_metrica(f"duracao.{self._tipo}", duracao_ms, "ms")
@@ -118,18 +94,16 @@ def historico_acoes(tipo: str | None = None, limite: int = 50) -> list[dict]:
         with conectar_banco() as c:
             if tipo:
                 rows = c.execute(
-                    "SELECT ts, tipo, modulo, descricao, duracao_ms, sucesso, dados_json "
-                    "FROM acoes WHERE tipo=? ORDER BY id DESC LIMIT ?",
+                    "SELECT ts, tipo, modulo, descricao, duracao_ms, sucesso, dados_json FROM acoes WHERE tipo=? ORDER BY id DESC LIMIT ?",
                     (tipo, limite),
                 ).fetchall()
             else:
                 rows = c.execute(
-                    "SELECT ts, tipo, modulo, descricao, duracao_ms, sucesso, dados_json "
-                    "FROM acoes ORDER BY id DESC LIMIT ?",
+                    "SELECT ts, tipo, modulo, descricao, duracao_ms, sucesso, dados_json FROM acoes ORDER BY id DESC LIMIT ?",
                     (limite,),
                 ).fetchall()
             return [dict(r) for r in rows]
-    except Exception:
+    except:
         return []
 
 
@@ -138,8 +112,7 @@ def resumo_metricas(nome: str, janela_s: int = 3600) -> dict:
     try:
         with conectar_banco() as c:
             rows = c.execute(
-                "SELECT valor FROM metricas WHERE nome=? AND ts > ?",
-                (nome, limite_ts),
+                "SELECT valor FROM metricas WHERE nome=? AND ts > ?", (nome, limite_ts)
             ).fetchall()
             valores = [r["valor"] for r in rows]
             if not valores:
@@ -152,7 +125,7 @@ def resumo_metricas(nome: str, janela_s: int = 3600) -> dict:
                 "max": round(max(valores), 2),
                 "janela_s": janela_s,
             }
-    except Exception:
+    except:
         return {"nome": nome, "amostras": 0}
 
 
@@ -167,7 +140,7 @@ def taxa_erros(janela_s: int = 3600) -> float:
                 "SELECT COUNT(*) FROM acoes WHERE ts > ? AND sucesso=0", (limite_ts,)
             ).fetchone()[0]
             return round(erros / total, 4) if total else 0.0
-    except Exception:
+    except:
         return 0.0
 
 
@@ -175,9 +148,9 @@ def purgar_antigos(dias: int = 7) -> int:
     limite = time.time() - dias * 86400
     try:
         with conectar_banco() as c:
-            n1 = c.execute("DELETE FROM acoes   WHERE ts < ?", (limite,)).rowcount
+            n1 = c.execute("DELETE FROM acoes WHERE ts < ?", (limite,)).rowcount
             n2 = c.execute("DELETE FROM metricas WHERE ts < ?", (limite,)).rowcount
             c.commit()
             return n1 + n2
-    except Exception:
+    except:
         return 0

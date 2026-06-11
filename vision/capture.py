@@ -24,21 +24,17 @@ MONITOR_INDEX = 1
 
 client: Optional[OpenAI] = None
 
+
 SYSTEM_RAPIDO = (
     "Você é o sensor visual do J.A.R.V.I.S. "
-    "Observe a tela e responda SOMENTE em JSON sem markdown. "
-    'Formato: {"ok": true/false, "tipo": "normal|erro|aviso|crash|travado|instalacao|compilacao|terminal|codigo|outro", '
-    '"resumo": "frase curta", "problema": "descrição se ok=false", "sugestao_rapida": "ação se ok=false"} '
-    "Máximo 20 palavras por campo."
+    "Responda apenas JSON puro sem markdown. "
+    '{"ok": true/false, "tipo": "normal|erro|aviso|crash|travado|instalacao|compilacao|terminal|codigo|outro", '
+    '"resumo": "curto", "problema": "", "sugestao_rapida": ""}'
 )
 
 SYSTEM_DICA = (
-    "Você é J.A.R.V.I.S, assistente técnico. Usuário é desenvolvedor ADS. "
-    "Analise o problema e forneça: diagnóstico direto, causa provável, solução em até 3 passos. "
-    "Seja técnico e direto. Português. Máximo 80 palavras. "
-    "Responda SOMENTE em JSON sem markdown. "
-    'Formato: {"ok": true/false, "tipo": "normal|erro|aviso|crash|travado|instalacao|compilacao|terminal|codigo|outro", '
-    '"resumo": "frase curta", "problema": "descrição se ok=false", "sugestao_rapida": "solução direta"}'
+    "Assistente técnico. Diagnóstico direto. JSON puro."
+    '{"ok": true/false, "tipo": "...", "resumo": "", "problema": "", "sugestao_rapida": ""}'
 )
 
 
@@ -49,7 +45,6 @@ class ResultadoAnalise:
     resumo: str = ""
     problema: str = ""
     sugestao_rapida: str = ""
-    dica_profunda: str = ""
     img_b64: str = ""
     timestamp: float = field(default_factory=time.time)
 
@@ -60,7 +55,7 @@ class MonitorConfig:
     apenas_mudancas: bool = True
     gerar_dica_auto: bool = True
     cooldown_s: float = 45.0
-    pergunta: str = "Analise esta tela. Há erros ou problemas visíveis?"
+    pergunta: str = "Analise esta tela."
     callback: Optional[Callable] = None
 
 
@@ -84,11 +79,12 @@ task: Optional[asyncio.Task] = None
 
 def get_client() -> Optional[OpenAI]:
     global client
+
     if client:
         return client
 
     if not getattr(config, "QWEN_API_KEY", None):
-        log.error("QWEN_API_KEY ausente.")
+        log.error("QWEN_API_KEY ausente")
         return None
 
     client = OpenAI(api_key=config.QWEN_API_KEY, base_url=config.BASE_URL)
@@ -100,6 +96,7 @@ def capturar_frame_base64() -> Optional[str]:
         with mss() as sct:
             idx = MONITOR_INDEX if len(sct.monitors) > MONITOR_INDEX else 0
             shot = sct.grab(sct.monitors[idx])
+
             img = Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
 
             if img.width > MAX_WIDTH:
@@ -107,9 +104,11 @@ def capturar_frame_base64() -> Optional[str]:
 
             buf = BytesIO()
             img.save(buf, format="JPEG", quality=JPEG_QUALITY)
+
             return base64.b64encode(buf.getvalue()).decode()
+
     except Exception as e:
-        log.error("Erro ao capturar tela: %s", e)
+        log.error("captura falhou: %s", e)
         return None
 
 
@@ -120,53 +119,43 @@ def hash_frame(b64: str) -> str:
 def parse(raw: str, img_b64: str) -> ResultadoAnalise:
     try:
         limpo = re.sub(r"```(?:json)?|```", "", raw).strip()
-        inicio = limpo.find("{")
-        fim = limpo.rfind("}") + 1
-        if inicio >= 0 and fim > inicio:
-            limpo = limpo[inicio:fim]
+        start, end = limpo.find("{"), limpo.rfind("}") + 1
+        limpo = limpo[start:end] if start >= 0 and end > start else limpo
 
-        dados = json.loads(limpo)
+        data = json.loads(limpo)
+
         return ResultadoAnalise(
-            ok=bool(dados.get("ok", True)),
-            tipo=str(dados.get("tipo", "normal")),
-            resumo=str(dados.get("resumo", "")),
-            problema=str(dados.get("problema", "")),
-            sugestao_rapida=str(dados.get("sugestao_rapida", "")),
+            ok=bool(data.get("ok", True)),
+            tipo=str(data.get("tipo", "normal")),
+            resumo=str(data.get("resumo", "")),
+            problema=str(data.get("problema", "")),
+            sugestao_rapida=str(data.get("sugestao_rapida", "")),
             img_b64=img_b64,
         )
+
     except Exception:
-        tem_prob = any(
-            k in raw.lower()
-            for k in ["erro", "error", "falha", "crash", "travad", "exception"]
-        )
         return ResultadoAnalise(
-            ok=not tem_prob,
-            tipo="erro" if tem_prob else "normal",
+            ok=False,
+            tipo="erro",
             resumo=raw[:120],
-            problema=raw[:120] if tem_prob else "",
+            problema=raw[:120],
             img_b64=img_b64,
         )
 
 
-def resultado_para_json(r: ResultadoAnalise) -> str:
-    return json.dumps(
-        {
-            "ok": r.ok,
-            "tipo": r.tipo,
-            "resumo": r.resumo,
-            "problema": r.problema,
-            "sugestao_rapida": r.sugestao_rapida,
-        },
-        ensure_ascii=False,
-    )
-
-
-async def chamar_qwen(
-    system: str, pergunta: str, img_b64: str, max_tokens: int = 120
-) -> str:
+async def chamar_qwen(system: str, prompt: str, img_b64: str, max_tokens=150) -> str:
     c = get_client()
+
     if not c:
-        return '{"ok": false, "tipo": "erro", "resumo": "Cliente Qwen não configurado.", "problema": "QWEN_API_KEY ausente.", "sugestao_rapida": "Configure a chave na aba Settings."}'
+        return json.dumps(
+            {
+                "ok": False,
+                "tipo": "erro",
+                "resumo": "cliente ausente",
+                "problema": "QWEN_API_KEY não configurada",
+                "sugestao_rapida": "configurar API key",
+            }
+        )
 
     try:
         resp = await asyncio.get_event_loop().run_in_executor(
@@ -179,7 +168,7 @@ async def chamar_qwen(
                     {
                         "role": "user",
                         "content": [
-                            {"type": "text", "text": pergunta},
+                            {"type": "text", "text": prompt},
                             {
                                 "type": "image_url",
                                 "image_url": {
@@ -191,60 +180,47 @@ async def chamar_qwen(
                 ],
             ),
         )
+
         return resp.choices[0].message.content.strip()
+
     except Exception as e:
-        log.exception("Qwen API erro: %s", e)
+        log.exception("erro API visão: %s", e)
         return json.dumps(
             {
                 "ok": False,
                 "tipo": "erro",
-                "resumo": "Falha na chamada à API.",
-                "problema": str(e)[:120],
-                "sugestao_rapida": "Verifique a chave e conexão.",
+                "resumo": "falha API",
+                "problema": str(e),
+                "sugestao_rapida": "verificar conexão",
             }
         )
 
 
 async def analisar_tela(prompt: str) -> str:
-    try:
-        await asyncio.sleep(0.6)
+    await asyncio.sleep(0.3)
 
-        loop = asyncio.get_event_loop()
-        img = await loop.run_in_executor(None, capturar_frame_base64)
-        if not img:
-            return json.dumps(
-                {
-                    "ok": False,
-                    "tipo": "erro",
-                    "resumo": "Falha ao capturar buffer óptico.",
-                    "problema": "capturar_frame_base64 retornou None.",
-                    "sugestao_rapida": "Verifique permissões de captura de tela.",
-                }
-            )
+    loop = asyncio.get_event_loop()
+    img = await loop.run_in_executor(None, capturar_frame_base64)
 
-        print(f"[VISION] Analisando com prompt: {prompt[:50]}...")
-
-        raw = await chamar_qwen(SYSTEM_RAPIDO, prompt, img, max_tokens=300)
-        resultado = parse(raw, img)
-        return resultado_para_json(resultado)
-
-    except Exception as e:
+    if not img:
         return json.dumps(
             {
                 "ok": False,
                 "tipo": "erro",
-                "resumo": f"Erro na análise neural: {str(e)[:80]}",
-                "problema": str(e),
-                "sugestao_rapida": "Verifique os logs do sistema.",
+                "resumo": "sem captura",
+                "problema": "frame vazio",
+                "sugestao_rapida": "verificar permissões",
             }
         )
 
+    raw = await chamar_qwen(SYSTEM_RAPIDO, prompt, img, 250)
+    return json.dumps(parse(raw, img).__dict__)
 
-async def gerar_dica_profunda(img_b64: str, problema: str, tipo: str) -> str:
-    prompt = f"Tipo: {tipo}.\nProblema: {problema}\nAnalise e diga o que fazer."
-    raw = await chamar_qwen(SYSTEM_DICA, prompt, img_b64, max_tokens=200)
-    resultado = parse(raw, img_b64)
-    return resultado.sugestao_rapida or resultado.resumo
+
+async def gerar_dica(img_b64: str, problema: str, tipo: str) -> str:
+    prompt = f"{tipo}: {problema}"
+    raw = await chamar_qwen(SYSTEM_DICA, prompt, img_b64, 180)
+    return parse(raw, img_b64).sugestao_rapida
 
 
 async def loop_monitor():
@@ -252,47 +228,40 @@ async def loop_monitor():
 
     while estado.rodando:
         t0 = time.monotonic()
+
         img = await loop.run_in_executor(None, capturar_frame_base64)
         estado.capturas += 1
 
         if img:
             h = hash_frame(img)
-            mudou = h != estado.ultimo_hash
 
-            if mudou or not cfg_mon.apenas_mudancas:
+            if h != estado.ultimo_hash or not cfg_mon.apenas_mudancas:
                 estado.ultimo_hash = h
                 estado.chamadas_api += 1
 
-                raw = await chamar_qwen(
-                    SYSTEM_RAPIDO, cfg_mon.pergunta, img, max_tokens=150
-                )
-                resultado = parse(raw, img)
-                estado.ultima_analise = resultado.resumo
-                estado.ultimo_resultado = resultado
+                raw = await chamar_qwen(cfg_mon.pergunta, cfg_mon.pergunta, img)
+                result = parse(raw, img)
 
-                agora = time.time()
-                em_cooldown = (agora - estado.ultimo_alerta) < cfg_mon.cooldown_s
+                estado.ultima_analise = result.resumo
+                estado.ultimo_resultado = result
 
-                if not resultado.ok and not em_cooldown:
+                now = time.time()
+                cooldown = now - estado.ultimo_alerta < cfg_mon.cooldown_s
+
+                if not result.ok and not cooldown:
                     estado.problemas += 1
-                    estado.ultimo_alerta = agora
+                    estado.ultimo_alerta = now
 
                     if cfg_mon.gerar_dica_auto:
-                        resultado.dica_profunda = await gerar_dica_profunda(
-                            img, resultado.problema, resultado.tipo
+                        result.sugestao_rapida = await gerar_dica(
+                            img, result.problema, result.tipo
                         )
 
                 if cfg_mon.callback:
                     try:
-                        import inspect
-
-                        if inspect.iscoroutinefunction(cfg_mon.callback):
-                            asyncio.create_task(cfg_mon.callback(resultado))
-                        else:
-                            cfg_mon.callback(resultado)
-
+                        cfg_mon.callback(result)
                     except Exception as e:
-                        log.warning("Callback erro: %s", e)
+                        log.warning("callback erro: %s", e)
 
         else:
             estado.economizados += 1
@@ -301,44 +270,39 @@ async def loop_monitor():
 
 
 async def iniciar_monitor(cfg: Optional[MonitorConfig] = None) -> bool:
-    global estado, cfg_mon, task
+    global cfg_mon, task, estado
 
     if task and not task.done():
         task.cancel()
-        try:
-            await asyncio.wait_for(asyncio.shield(task), timeout=2.0)
-        except Exception:
-            pass
 
     cfg_mon = cfg or MonitorConfig()
     estado = Estado(rodando=True)
-    task = asyncio.get_event_loop().create_task(loop_monitor())
+
+    task = asyncio.create_task(loop_monitor())
     return True
 
 
 def parar_monitor() -> dict:
     global estado, task
-    if not estado.rodando:
-        return {"status": "inativo"}
 
     estado.rodando = False
-    if task and not task.done():
+
+    if task:
         task.cancel()
 
     return {
         "capturas": estado.capturas,
         "chamadas_api": estado.chamadas_api,
-        "total_problemas": estado.problemas,
+        "problemas": estado.problemas,
         "economizados": estado.economizados,
-        "ultima_analise": estado.ultima_analise,
+        "ultima": estado.ultima_analise,
     }
 
 
 def status_monitor() -> dict:
     return {
         "rodando": estado.rodando,
+        "problemas": estado.problemas,
         "chamadas_api": estado.chamadas_api,
-        "total_problemas": estado.problemas,
-        "economizados": estado.economizados,
-        "ultima_analise": estado.ultima_analise,
+        "ultima": estado.ultima_analise,
     }

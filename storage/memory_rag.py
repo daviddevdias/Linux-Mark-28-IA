@@ -1,21 +1,10 @@
 from __future__ import annotations
-
-import hashlib
-import json
-import logging
-import os
-import re
-import sqlite3
-import time
-import unicodedata
+import hashlib, json, logging, re, sqlite3, time, unicodedata
 from dataclasses import dataclass
-from typing import Any
+from pathlib import Path
 
 log = logging.getLogger("jarvis.memory_rag")
-
-DB_PATH = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "logs", "rag_memory.db"
-)
+DB_PATH = Path(__file__).parent / "logs" / "rag_memory.db"
 MAX_CURTA = 20
 SCORE_MIN = 0.25
 
@@ -32,24 +21,15 @@ class MemoriaItem:
 
 
 def conectar() -> sqlite3.Connection:
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     c = sqlite3.connect(DB_PATH, check_same_thread=False, timeout=5)
     c.execute("PRAGMA journal_mode=WAL;")
     c.execute("PRAGMA synchronous=NORMAL;")
     c.row_factory = sqlite3.Row
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS memoria (
-            id            INTEGER PRIMARY KEY AUTOINCREMENT,
-            tipo          TEXT NOT NULL,
-            chave         TEXT NOT NULL,
-            valor         TEXT NOT NULL,
-            contexto      TEXT DEFAULT '',
-            acessos       INTEGER DEFAULT 0,
-            criado_em     REAL NOT NULL,
-            atualizado_em REAL NOT NULL
-        )
-    """)
-    c.execute("CREATE INDEX IF NOT EXISTS idx_tipo  ON memoria(tipo)")
+    c.execute(
+        "CREATE TABLE IF NOT EXISTS memoria (id INTEGER PRIMARY KEY AUTOINCREMENT, tipo TEXT NOT NULL, chave TEXT NOT NULL, valor TEXT NOT NULL, contexto TEXT DEFAULT '', acessos INTEGER DEFAULT 0, criado_em REAL NOT NULL, atualizado_em REAL NOT NULL)"
+    )
+    c.execute("CREATE INDEX IF NOT EXISTS idx_tipo ON memoria(tipo)")
     c.execute("CREATE INDEX IF NOT EXISTS idx_chave ON memoria(chave)")
     c.commit()
     return c
@@ -69,12 +49,10 @@ def calcular_score(query_tokens: set[str], valor: str, contexto: str) -> float:
     item_tokens = tokenizar(valor) | tokenizar(contexto)
     if not item_tokens:
         return 0.0
-    intersecao = query_tokens & item_tokens
-    return len(intersecao) / max(len(query_tokens), 1)
+    return len(query_tokens & item_tokens) / max(len(query_tokens), 1)
 
 
 class MemoriaRAG:
-
     def __init__(self):
         self.curta: list[dict] = []
 
@@ -92,14 +70,12 @@ class MemoriaRAG:
                     )
                 else:
                     c.execute(
-                        "INSERT INTO memoria (tipo, chave, valor, contexto, criado_em, atualizado_em) "
-                        "VALUES (?,?,?,?,?,?)",
+                        "INSERT INTO memoria (tipo, chave, valor, contexto, criado_em, atualizado_em) VALUES (?,?,?,?,?,?)",
                         (tipo, chave[:200], valor[:2000], contexto[:500], agora, agora),
                     )
                 c.commit()
         except Exception as exc:
             log.error("RAG salvar: %s", exc)
-
         self.curta.append({"tipo": tipo, "chave": chave, "valor": valor, "ts": agora})
         if len(self.curta) > MAX_CURTA:
             self.curta = self.curta[-MAX_CURTA:]
@@ -114,9 +90,7 @@ class MemoriaRAG:
         tokens = tokenizar(query)
         if not tokens:
             return []
-
         resultados: list[MemoriaItem] = []
-
         for item in reversed(self.curta[-MAX_CURTA:]):
             if tipo and item["tipo"] != tipo:
                 continue
@@ -133,14 +107,12 @@ class MemoriaRAG:
                         ts=item["ts"],
                     )
                 )
-
         try:
             with conectar() as c:
                 filtro = "WHERE tipo=?" if tipo else ""
                 params = (tipo,) if tipo else ()
                 rows = c.execute(
-                    f"SELECT id, tipo, chave, valor, contexto, atualizado_em FROM memoria {filtro} "
-                    "ORDER BY atualizado_em DESC LIMIT 100",
+                    f"SELECT id, tipo, chave, valor, contexto, atualizado_em FROM memoria {filtro} ORDER BY atualizado_em DESC LIMIT 100",
                     params,
                 ).fetchall()
                 for row in rows:
@@ -164,9 +136,7 @@ class MemoriaRAG:
                 c.commit()
         except Exception as exc:
             log.error("RAG buscar: %s", exc)
-
-        vistos: set[str] = set()
-        unicos: list[MemoriaItem] = []
+        vistos, unicos = set(), []
         for item in sorted(resultados, key=lambda x: (x.score, x.ts), reverse=True):
             sig = f"{item.tipo}:{item.chave}"
             if sig not in vistos:
@@ -180,8 +150,7 @@ class MemoriaRAG:
         itens = self.buscar(query, limite=4)
         if not itens:
             return ""
-        partes = []
-        total = 0
+        partes, total = [], 0
         for item in itens:
             trecho = f"[{item.tipo}] {item.chave}: {item.valor}"[:200]
             if total + len(trecho) > max_chars:
@@ -201,7 +170,7 @@ class MemoriaRAG:
                     (chave,),
                 ).fetchone()
                 return row["valor"] if row else default
-        except Exception:
+        except:
             return default
 
     def purgar_antigos(self, dias: int = 30) -> int:
@@ -214,7 +183,7 @@ class MemoriaRAG:
                 )
                 c.commit()
                 return cur.rowcount
-        except Exception:
+        except:
             return 0
 
 

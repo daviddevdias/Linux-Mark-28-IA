@@ -25,7 +25,6 @@ class EstadoSistema:
 
 
 class StateManager:
-
     def __init__(self):
         self.estado = EstadoSistema()
         self.lock = threading.RLock()
@@ -52,7 +51,8 @@ class StateManager:
             from brain.event_bus import bus, ESTADO_ALTERADO
 
             bus.publicar(
-                ESTADO_ALTERADO, {"chave": chave, "antes": antigo, "depois": valor}
+                ESTADO_ALTERADO,
+                {"chave": chave, "antes": antigo, "depois": valor},
             )
         except Exception:
             pass
@@ -64,7 +64,8 @@ class StateManager:
     def snapshot(self) -> dict:
         with self.lock:
             return {
-                k: getattr(self.estado, k) for k in self.estado.__dataclass_fields__
+                k: getattr(self.estado, k)
+                for k in self.estado.__dataclass_fields__
             }
 
     def watch(self, chave: str, fn):

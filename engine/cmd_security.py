@@ -1,37 +1,20 @@
 from __future__ import annotations
-
-import os
-import re
-import shlex
-import ast
-import sqlite3
-import subprocess
-import logging
+import os, re, shlex, ast, sqlite3, subprocess, logging
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from typing import Optional, Callable
 
 log = logging.getLogger("jarvis.cmd_security")
-
 _DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs", "audit.db")
 
 
 def _get_conn() -> sqlite3.Connection:
     os.makedirs(os.path.dirname(_DB_PATH), exist_ok=True)
     conn = sqlite3.connect(_DB_PATH, check_same_thread=False, timeout=5)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS audit_log (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
-            ts         TEXT    NOT NULL,
-            origem     TEXT    DEFAULT 'cmd',
-            ferramenta TEXT    DEFAULT '',
-            comando    TEXT    NOT NULL,
-            resultado  TEXT    DEFAULT '',
-            bloqueado  INTEGER DEFAULT 0,
-            motivo     TEXT    DEFAULT ''
-        )
-    """)
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS audit_log (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, origem TEXT DEFAULT 'cmd', ferramenta TEXT DEFAULT '', comando TEXT NOT NULL, resultado TEXT DEFAULT '', bloqueado INTEGER DEFAULT 0, motivo TEXT DEFAULT '')"
+    )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_ts ON audit_log(ts)")
     conn.commit()
     return conn
@@ -44,12 +27,11 @@ def _audit(
     motivo: str = "",
     origem: str = "cmd",
     ferramenta: str = "",
-) -> None:
+):
     try:
         with _get_conn() as conn:
             conn.execute(
-                "INSERT INTO audit_log (ts, origem, ferramenta, comando, resultado, bloqueado, motivo) "
-                "VALUES (?,?,?,?,?,?,?)",
+                "INSERT INTO audit_log (ts, origem, ferramenta, comando, resultado, bloqueado, motivo) VALUES (?,?,?,?,?,?,?)",
                 (
                     datetime.now().isoformat(timespec="seconds"),
                     origem,
@@ -62,7 +44,7 @@ def _audit(
             )
             conn.commit()
     except Exception as e:
-        log.error("[Audit] Falha ao registrar: %s", e)
+        log.error("[Audit] Falha: %s", e)
 
 
 class Categoria(Enum):
@@ -114,7 +96,7 @@ BLOQUEIOS = [
     r"sudo\s+(su|-s)",
 ]
 
-REGRAS: list[Regra] = [
+REGRAS = [
     Regra(
         re.compile(
             r"^(ls|dir|echo|pwd|whoami|date|uptime|df|du|free|ps|top|cat\s+\S+\.(txt|log|json)|type\s+\S+)"
@@ -178,23 +160,17 @@ def tem_injecao(cmd: str) -> bool:
 
 def avaliar(comando: str) -> Avaliacao:
     cmd = sanitizar(comando)
-
     if not cmd:
         return Avaliacao(permitido=False, motivo="Comando vazio.")
-
     for padrao in BLOQUEIOS_COMPILADOS:
         if padrao.search(cmd):
             log.warning("Bloqueado: %s", cmd[:80])
-            _audit(cmd, bloqueado=True, motivo="Padrão proibido detectado.")
+            _audit(cmd, bloqueado=True, motivo="Padrão proibido.")
             return Avaliacao(permitido=False, motivo="Padrão proibido detectado.")
-
     if tem_injecao(cmd):
         log.warning("Injeção detectada: %s", cmd[:80])
         _audit(cmd, bloqueado=True, motivo="Operadores de encadeamento suspeitos.")
-        return Avaliacao(
-            permitido=False, motivo="Operadores de encadeamento suspeitos (;, &&, ||)."
-        )
-
+        return Avaliacao(permitido=False, motivo="Operadores suspeitos (;, &&, ||).")
     for regra in REGRAS:
         if regra.padrao.match(cmd):
             return Avaliacao(
@@ -203,7 +179,6 @@ def avaliar(comando: str) -> Avaliacao:
                 categoria=regra.categoria,
                 cmd=cmd,
             )
-
     return Avaliacao(
         permitido=True,
         confirmar=True,
@@ -221,7 +196,6 @@ def executar(
     ferramenta: str = "",
 ):
     av = avaliar(comando)
-
     if not av.permitido:
         _audit(
             comando,
@@ -232,13 +206,9 @@ def executar(
             ferramenta=ferramenta,
         )
         return f"Bloqueado: {av.motivo}"
-
     if av.confirmar:
         if confirmar_fn is None:
-            return (
-                f"Comando '{av.categoria.value}' requer confirmação.\n"
-                f"Use: executar_confirmado('{comando}')"
-            )
+            return f"Comando '{av.categoria.value}' requer confirmação."
         if not confirmar_fn(comando, av):
             _audit(
                 comando,
@@ -247,34 +217,19 @@ def executar(
                 ferramenta=ferramenta,
             )
             return "Execução cancelada."
-
     cmd = av.cmd or comando
     usar_shell = any(r.shell and r.padrao.match(cmd) for r in REGRAS)
-
     try:
-        if usar_shell:
-            res = subprocess.run(
-                cmd, shell=True, capture_output=True, text=True, timeout=timeout
-            )
-        else:
-            try:
-                args = shlex.split(cmd)
-            except ValueError:
-                args = cmd.split()
-            res = subprocess.run(
-                args, shell=False, capture_output=True, text=True, timeout=timeout
-            )
-
+        args = cmd if usar_shell else (shlex.split(cmd) if " " in cmd else cmd.split())
+        res = subprocess.run(
+            args, shell=usar_shell, capture_output=True, text=True, timeout=timeout
+        )
         saida = (res.stdout or res.stderr or "Executado sem saída.").strip()
-        if res.returncode != 0:
-            log.warning("Código %d: %s", res.returncode, cmd[:60])
-
         saida_truncada = saida[:600]
         _audit(cmd, resultado=saida_truncada, origem=origem, ferramenta=ferramenta)
         return saida_truncada
-
     except subprocess.TimeoutExpired:
-        msg = f"Timeout: excedeu {timeout}s."
+        msg = f"Timeout: {timeout}s."
         _audit(cmd, resultado=msg, origem=origem, ferramenta=ferramenta)
         return msg
     except FileNotFoundError:
@@ -283,26 +238,13 @@ def executar(
         return msg
     except Exception as e:
         msg = f"Erro: {e}"
-        log.error("Erro ao executar '%s': %s", cmd[:60], e)
         _audit(cmd, resultado=msg, origem=origem, ferramenta=ferramenta)
         return msg
 
 
-class SecurityBlockError(Exception):
-    pass
-
-
 def validar_codigo_ast(codigo_fonte: str) -> bool:
-    modulos_proibidos = {
-        "os",
-        "sys",
-        "shutil",
-        "subprocess",
-        "socket",
-        "requests",
-        "pty",
-    }
-    funcoes_proibidas = {
+    proibidos_mod = {"os", "sys", "shutil", "subprocess", "socket", "requests", "pty"}
+    proibidos_fn = {
         "eval",
         "exec",
         "open",
@@ -311,43 +253,37 @@ def validar_codigo_ast(codigo_fonte: str) -> bool:
         "setattr",
         "compile",
     }
-
     try:
         arvore = ast.parse(codigo_fonte)
-    except SyntaxError as e:
-        log.error("Erro de sintaxe gerado pelo Agent S: %s", e)
+    except SyntaxError:
         return False
-
     for no in ast.walk(arvore):
         if isinstance(no, ast.Import):
-            for alias in no.names:
-                if alias.name.split(".")[0] in modulos_proibidos:
-                    log.warning(
-                        "Agent S tentou importar módulo proibido: %s", alias.name
-                    )
-                    return False
+            if any(alias.name.split(".")[0] in proibidos_mod for alias in no.names):
+                return False
         elif isinstance(no, ast.ImportFrom):
-            if no.module and no.module.split(".")[0] in modulos_proibidos:
-                log.warning("Agent S tentou importar de módulo proibido: %s", no.module)
+            if no.module and no.module.split(".")[0] in proibidos_mod:
                 return False
-        elif isinstance(no, ast.Call):
-            if isinstance(no.func, ast.Name) and no.func.id in funcoes_proibidas:
-                log.warning("Agent S tentou usar função crítica: %s", no.func.id)
-                return False
-
+        elif (
+            isinstance(no, ast.Call)
+            and isinstance(no.func, ast.Name)
+            and no.func.id in proibidos_fn
+        ):
+            return False
     return True
 
 
 def audit_recente(limite: int = 50) -> list[dict]:
     try:
         with _get_conn() as conn:
-            rows = conn.execute(
-                "SELECT ts, origem, ferramenta, comando, resultado, bloqueado, motivo "
-                "FROM audit_log ORDER BY id DESC LIMIT ?",
-                (limite,),
-            ).fetchall()
-            return [dict(r) for r in rows]
-    except Exception:
+            return [
+                dict(r)
+                for r in conn.execute(
+                    "SELECT ts, origem, ferramenta, comando, resultado, bloqueado, motivo FROM audit_log ORDER BY id DESC LIMIT ?",
+                    (limite,),
+                ).fetchall()
+            ]
+    except:
         return []
 
 

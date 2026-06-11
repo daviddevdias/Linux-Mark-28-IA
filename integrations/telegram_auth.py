@@ -1,14 +1,6 @@
-from __future__ import annotations
-
-import hashlib
-import hmac
-import logging
-import os
-import time
+import hashlib, hmac, os, time
 from functools import wraps
 from typing import Callable
-
-log = logging.getLogger("jarvis.telegram_security")
 
 _ALLOWED_IDS: set[int] = set()
 _AUTH_TOKEN: str = ""
@@ -21,9 +13,8 @@ def carregar_config():
     ids_raw = os.environ.get("TELEGRAM_ALLOWED_IDS", "")
     if ids_raw:
         for part in ids_raw.split(","):
-            part = part.strip()
-            if part.isdigit():
-                _ALLOWED_IDS.add(int(part))
+            if part.strip().isdigit():
+                _ALLOWED_IDS.add(int(part.strip()))
     try:
         import config as cfg
 
@@ -35,13 +26,8 @@ def carregar_config():
         )
         if token:
             _AUTH_TOKEN = token
-    except Exception:
+    except:
         pass
-    if not _ALLOWED_IDS:
-        log.warning(
-            "[Telegram] Nenhum TELEGRAM_ALLOWED_IDS configurado. "
-            "Defina em config.py ou na variável de ambiente TELEGRAM_ALLOWED_IDS."
-        )
 
 
 def adicionar_id_autorizado(chat_id: int):
@@ -49,17 +35,17 @@ def adicionar_id_autorizado(chat_id: int):
 
 
 def e_autorizado(chat_id: int) -> bool:
-    if not _ALLOWED_IDS:
-        return False
-    return chat_id in _ALLOWED_IDS
+    return chat_id in _ALLOWED_IDS if _ALLOWED_IDS else False
 
 
 def verificar_token(token_fornecido: str) -> bool:
-    if not _AUTH_TOKEN:
-        return False
-    return hmac.compare_digest(
-        hashlib.sha256(token_fornecido.encode()).hexdigest(),
-        hashlib.sha256(_AUTH_TOKEN.encode()).hexdigest(),
+    return (
+        hmac.compare_digest(
+            hashlib.sha256(token_fornecido.encode()).hexdigest(),
+            hashlib.sha256(_AUTH_TOKEN.encode()).hexdigest(),
+        )
+        if _AUTH_TOKEN
+        else False
     )
 
 
@@ -88,23 +74,17 @@ def requer_autorizacao(fn: Callable) -> Callable:
         if e_autorizado(chat_id):
             return await fn(update, context, *args, **kwargs)
         if esta_pendente_auth(chat_id):
-            texto = (update.message.text or "").strip()
-            if verificar_token(texto):
+            if verificar_token((update.message.text or "").strip()):
                 adicionar_id_autorizado(chat_id)
                 limpar_pendente(chat_id)
-                log.info("[Telegram] chat_id %d autenticado com sucesso.", chat_id)
                 await update.message.reply_text("Acesso autorizado.")
                 return
-            else:
-                log.warning("[Telegram] Token inválido de chat_id %d.", chat_id)
-                await update.message.reply_text("Token inválido. Tente novamente.")
-                return
-        log.warning("[Telegram] Acesso negado para chat_id %d.", chat_id)
+            await update.message.reply_text("Token inválido. Tente novamente.")
+            return
         marcar_pendente_auth(chat_id)
         await update.message.reply_text(
-            "Acesso restrito. Envie o token de autenticação para continuar."
+            "Acesso restrito. Envie o token de autenticação."
         )
-        return
 
     return wrapper
 

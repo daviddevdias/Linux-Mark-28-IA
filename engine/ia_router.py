@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 from engine.controller import (
     IARRouter,
     Historico,
