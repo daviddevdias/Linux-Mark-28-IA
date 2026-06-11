@@ -203,8 +203,6 @@ class SystemOrchestrator:
             self.state.ultima_sugestao,
         ) = (resultado, True, agora)
         alerta = ALERTAS.get(resultado.tipo, "Algo incomum na tela.")
-
-        # Gera dica via router em vez de usar função externa
         dica_profunda_gerada = await router.responder(
             f"Como resolver rapidamente: {resultado.problema}",
             memoria=self.construir_contexto(),
@@ -259,7 +257,6 @@ class SystemOrchestrator:
             ):
                 self.state.aguardando = False
                 obj = self.state.ultima_analise_obj
-
                 dica = await router.responder(
                     f"Sugira solução técnica e prática para: {obj.problema if obj else 'problema'}",
                     memoria=self.construir_contexto(),
@@ -267,7 +264,6 @@ class SystemOrchestrator:
                         obj.img_b64 if obj and getattr(obj, "img_b64", None) else None
                     ),
                 )
-
                 self.ui.emitir(
                     {"monitor_dica": dica, "monitor_tipo": obj.tipo if obj else "erro"}
                 )

@@ -1,13 +1,6 @@
 from __future__ import annotations
-
-import asyncio
-import webbrowser
-import subprocess
-import os
-import json
-import urllib.parse
+import asyncio, webbrowser, subprocess, os, json, urllib.parse, shutil, pathlib, threading
 from typing import Any, Callable
-
 from tasks.spotify_manager import spotify_stark
 from tasks.open_app import open_app
 from tasks.weather import obter_previsao_hoje, verificar_chuva_amanha
@@ -24,147 +17,134 @@ def executar_no_loop_atual(coro) -> Any:
         loop = asyncio.get_running_loop()
     except RuntimeError:
         return asyncio.run(coro)
-
-    import threading
-
-    loop_thread = getattr(loop, "_thread_id", None)
-    current_thread = threading.get_ident()
-
-    if loop_thread is not None and loop_thread == current_thread:
-        raise RuntimeError(
-            "executar_no_loop_atual() chamado dentro da thread do loop de eventos. "
-            "Refatore o gerenciador para async ou chame-o via run_in_executor()."
-        )
-
-    fut = asyncio.run_coroutine_threadsafe(coro, loop)
-    return fut.result(timeout=30)
+    if getattr(loop, "_thread_id", None) == threading.get_ident():
+        raise RuntimeError("executar_no_loop_atual() na mesma thread. Use async.")
+    return asyncio.run_coroutine_threadsafe(coro, loop).result(timeout=30)
 
 
 def gerenciador_open_app(argumentos: dict):
-    app_name = argumentos.get("app_name", "o aplicativo solicitado")
     open_app(argumentos)
-    return f"Inicializando {app_name} imediatamente, Senhor."
+    return f"Inicializando {argumentos.get('app_name', 'app')}."
 
 
 def gerenciador_computador(argumentos: dict):
     computer_settings(argumentos)
-    return "Configurações de hardware e parâmetros do sistema atualizados, Senhor."
+    return "Configurações de hardware atualizadas."
 
 
 def gerenciador_cmd(argumentos: dict):
     comando = argumentos.get("command", "").strip()
-    tarefa = argumentos.get("task", "").strip()
-    if not comando and tarefa:
+    if not comando and argumentos.get("task", "").strip():
         from engine.ia_router import router
 
-        prompt = f"Gere APENAS o comando de terminal para: {tarefa}. Responda somente com o comando puro."
         try:
             comando = (
-                executar_no_loop_atual(router.responder(prompt))
+                executar_no_loop_atual(
+                    router.responder(
+                        f"Gere APENAS o comando de terminal para: {argumentos['task']}. Responda somente com o comando puro."
+                    )
+                )
                 .strip()
                 .strip("`")
                 .strip()
             )
         except Exception as e:
-            return f"Erro crítico ao gerar comando neural: {e}"
-
+            return f"Erro crítico: {e}"
     if not comando:
-        return "Alvo de execução nulo. Nenhum comando foi estruturado."
-
+        return "Comando nulo."
     av = avaliar(comando)
-    if not av.permitido:
-        return f"Ação abortada por segurança, Senhor. Motivo: {av.motivo}"
-
-    saida = executar(comando, timeout=20, ferramenta="cmd_control")
-    return f"Comando '{comando}' executado. Saída: {saida}"
+    return (
+        f"Bloqueado: {av.motivo}"
+        if not av.permitido
+        else f"Executado. Saída: {executar(comando, timeout=20, ferramenta='cmd_control')}"
+    )
 
 
 def gerenciador_web_search(argumentos: dict):
-    query = argumentos.get("query", "").strip()
-    if query:
-        url = f"https://www.google.com/search?q={urllib.parse.quote(query)}"
-        webbrowser.open(url)
-        return f"Varredura de rede iniciada. Resultados para '{query}' projetados no navegador, Senhor."
-    return "A busca web falhou. Termo de pesquisa inválido ou nulo."
+    q = argumentos.get("query", "").strip()
+    if q:
+        webbrowser.open(
+            f"[https://www.google.com/search?q=](https://www.google.com/search?q=){urllib.parse.quote(q)}"
+        )
+    return f"Pesquisa enviada para o navegador." if q else "Falha: termo inválido."
 
 
 def gerenciador_browser(argumentos: dict):
-    acao = argumentos.get("action", "open").lower()
-    url = argumentos.get("url", "").strip()
-    query = argumentos.get("query", "").strip()
-
+    acao, url, q = (
+        argumentos.get("action", "open").lower(),
+        argumentos.get("url", "").strip(),
+        argumentos.get("query", "").strip(),
+    )
     if acao == "open" and url:
         webbrowser.open(url)
-        return f"Acessando o protocolo de rede externo em {url}, Senhor."
-    if acao in ("search", "open") and query:
-        webbrowser.open(f"https://www.google.com/search?q={urllib.parse.quote(query)}")
-        return f"Pesquisando índices globais para '{query}'."
+        return f"Acessando {url}."
+    if acao in ("search", "open") and q:
+        webbrowser.open(
+            f"[https://www.google.com/search?q=](https://www.google.com/search?q=){urllib.parse.quote(q)}"
+        )
+        return f"Buscando '{q}'."
     if url:
         webbrowser.open(url)
-        return f"Direcionando requisição para {url}."
-    return "A diretiva do navegador foi processada, mas nenhum parâmetro válido foi extraído."
+        return f"Direcionando para {url}."
+    return "Falha nos parâmetros web."
 
 
 def gerenciador_youtube(argumentos: dict):
-    query = argumentos.get("query", "").strip()
-    if query:
-        url = (
-            f"https://www.youtube.com/results?search_query={urllib.parse.quote(query)}"
-        )
-        webbrowser.open(url)
-        return f"Sincronizando stream de vídeo. Resultados para '{query}' carregados do YouTube."
-    else:
-        webbrowser.open("https://www.youtube.com")
-        return "Acessando interface principal da plataforma YouTube, Senhor."
+    q = argumentos.get("query", "").strip()
+    webbrowser.open(
+        f"[https://www.youtube.com/results?search_query=](https://www.youtube.com/results?search_query=){urllib.parse.quote(q)}"
+        if q
+        else "[https://www.youtube.com](https://www.youtube.com)"
+    )
+    return f"Buscando '{q}' no YouTube." if q else "Acessando YouTube."
 
 
 def gerenciador_spotify(argumentos: dict):
-    acao = argumentos.get("action", "").lower()
     if argumentos.get("playlist_name"):
         spotify_stark.listar_e_tocar_playlist(argumentos["playlist_name"])
-        return f"Sincronizando áudio. Reproduzindo sua playlist personalizada agora, Senhor."
+        return "Reproduzindo playlist."
     if argumentos.get("search_query"):
         spotify_stark.abrir_e_buscar(argumentos["search_query"])
-        return f"Localizando faixa de áudio para '{argumentos['search_query']}' no banco de dados musical."
-    spotify_stark.controlar_reproducao(acao or "playpause")
-    return "Frequências sonoras e reprodutor controlados de acordo com os protocolos, Senhor."
+        return "Localizando faixa."
+    spotify_stark.controlar_reproducao(argumentos.get("action", "playpause").lower())
+    return "Spotify controlado."
 
 
 def gerenciador_clima(argumentos: dict):
-    cidade = argumentos.get("city", "")
-    previsao = argumentos.get("forecast", "hoje").lower()
-    if previsao == "amanha":
-        res = verificar_chuva_amanha(cidade)
-        return f"Análise barométrica concluída para amanhã: {res if res else 'Dados indisponíveis no momento.'}"
-    res = obter_previsao_hoje(cidade)
-    return f"Dados meteorológicos de hoje atualizados em tempo real, Senhor: {res if res else 'Falha na telemetria local.'}"
+    cidade, prev = (
+        argumentos.get("city", ""),
+        argumentos.get("forecast", "hoje").lower(),
+    )
+    return (
+        f"Clima amanhã: {verificar_chuva_amanha(cidade)}"
+        if prev == "amanha"
+        else f"Clima atual: {obter_previsao_hoje(cidade)}"
+    )
 
 
 def gerenciador_alarme(argumentos: dict):
-    operacao = argumentos.get("op", "add").lower()
-    if operacao == "list":
-        itens = listar_alarmes()
-        if isinstance(itens, list):
-            return (
-                "Listando agendamentos ativos no cronômetro do sistema:\n"
-                + "\n".join(f"• {item['hora']} — {item['missao']}" for item in itens)
-            )
-        return str(itens)
-    if operacao == "remove":
+    op = argumentos.get("op", "add").lower()
+    if op == "list":
+        return (
+            "Alarmes ativos:\n"
+            + "\n".join(f"• {i['hora']} — {i['missao']}" for i in listar_alarmes())
+            if isinstance(listar_alarmes(), list)
+            else str(listar_alarmes())
+        )
+    if op == "remove":
         remover_alarme(argumentos.get("hora", ""), argumentos.get("missao", ""))
-        return "Protocolo de agendamento removido da memória operacional, Senhor."
-
-    hora = argumentos.get("hora", "")
-    missao = argumentos.get("missao", "Lembrete")
-    if not hora:
-        return "Impossível criar alerta. Janela temporal não especificada."
-
-    data_alarme = argumentos.get("data")
-    if isinstance(data_alarme, str) and not data_alarme.strip():
-        data_alarme = None
-
-    adicionar_alarme(hora, missao, data=data_alarme)
-    return f"Alarme configurado com sucesso. Notificação agendada para às {hora} para a tarefa: {missao}."
+        return "Alarme removido."
+    h = argumentos.get("hora", "")
+    if not h:
+        return "Impossível criar sem horário."
+    adicionar_alarme(
+        h,
+        argumentos.get("missao", "Lembrete"),
+        data=(
+            argumentos.get("data") if str(argumentos.get("data", "")).strip() else None
+        ),
+    )
+    return f"Alarme para {h}."
 
 
 def gerenciador_casa_inteligente(argumentos: dict):
@@ -176,216 +156,167 @@ def gerenciador_casa_inteligente(argumentos: dict):
         status_tv,
     )
 
-    dispositivo = argumentos.get("device", "").lower()
     acao = argumentos.get("action", "").lower()
-
-    if "tv" in dispositivo:
+    if "tv" in argumentos.get("device", "").lower():
         if acao in ("youtube", "abrir_youtube", "app_youtube"):
             abrir_youtube_tv()
-            return "Redirecionando sinal de mídia principal para o aplicativo do YouTube na TV, Senhor."
+            return "Abrindo YouTube na TV."
         if acao == "on":
-            if energia_tv(True):
-                return "Módulos de tela ativados. Televisão principal inicializada, Senhor."
-            if not buscar_id_tv():
-                return f"Falha de link com o hardware de vídeo. Diagnóstico: {diagnosticar_falha_tv()}"
-            return "Falha de barramento ao enviar sinal de inicialização para a TV."
+            return (
+                "TV ligada."
+                if energia_tv(True)
+                else (
+                    diagnosticar_falha_tv() if not buscar_id_tv() else "Falha ao ligar."
+                )
+            )
         if acao == "off":
-            if energia_tv(False):
-                return "Encerrando periféricos de vídeo. Televisão principal desativada, Senhor."
-            if not buscar_id_tv():
-                return f"Falha de link com o hardware de vídeo. Diagnóstico: {diagnosticar_falha_tv()}"
-            return "Falha de barramento ao enviar sinal de desligamento para a TV."
+            return (
+                "TV desligada."
+                if energia_tv(False)
+                else (
+                    diagnosticar_falha_tv()
+                    if not buscar_id_tv()
+                    else "Falha ao desligar."
+                )
+            )
         if acao == "status":
-            return f"Telemetria da interface doméstica: {status_tv()}"
-    return "Comando de automação residencial recebido. Subsistema focado apenas nos módulos de TV no momento."
+            return status_tv()
+    return "Comando de automação ignorado."
 
 
 def gerenciador_arquivos(argumentos: dict):
-    acao = argumentos.get("action", "")
-    caminho = argumentos.get("path", "")
-    nome = argumentos.get("name", "")
-    conteudo = argumentos.get("content", "")
-    permanente = argumentos.get("permanent", False)
-
-    import os, shutil, pathlib
-
+    acao, caminho, nome, conteudo, permanente = (
+        argumentos.get("action", ""),
+        argumentos.get("path", ""),
+        argumentos.get("name", ""),
+        argumentos.get("content", ""),
+        argumentos.get("permanent", False),
+    )
     atalhos = {
         "desktop": os.path.join(os.path.expanduser("~"), "Desktop"),
         "downloads": os.path.join(os.path.expanduser("~"), "Downloads"),
         "documentos": os.path.join(os.path.expanduser("~"), "Documents"),
         "home": os.path.expanduser("~"),
     }
-
-    caminho_resolvido = (
+    cam_resolvido = (
         atalhos.get(caminho.lower(), caminho) if caminho else os.path.expanduser("~")
     )
-    alvo = os.path.join(caminho_resolvido, nome) if nome else caminho_resolvido
-
+    alvo = os.path.join(cam_resolvido, nome) if nome else cam_resolvido
     try:
         if acao == "list":
-            itens = os.listdir(caminho_resolvido)
-            return "Itens em " + caminho_resolvido + ": " + ", ".join(itens[:30])
+            return "Itens: " + ", ".join(os.listdir(cam_resolvido)[:30])
         if acao == "create_file":
             pathlib.Path(alvo).write_text(conteudo, encoding="utf-8")
-            return f"Arquivo '{alvo}' criado com sucesso."
+            return "Arquivo criado."
         if acao == "create_folder":
             os.makedirs(alvo, exist_ok=True)
-            return f"Pasta '{alvo}' criada."
+            return "Pasta criada."
         if acao == "read":
-            texto = pathlib.Path(alvo).read_text(encoding="utf-8", errors="replace")
-            return texto[:1000]
+            return pathlib.Path(alvo).read_text(encoding="utf-8", errors="replace")[
+                :1000
+            ]
         if acao == "delete":
+            lixo = os.path.join(
+                os.path.expanduser("~"), ".local", "share", "Trash", "files"
+            )
+            os.makedirs(lixo, exist_ok=True)
             if os.path.isdir(alvo):
                 (
                     shutil.rmtree(alvo)
                     if permanente
-                    else shutil.move(
-                        alvo,
-                        os.path.join(
-                            os.path.expanduser("~"), ".Trash", nome or "pasta"
-                        ),
-                    )
+                    else shutil.move(alvo, os.path.join(lixo, nome or "pasta"))
                 )
             else:
                 (
                     os.remove(alvo)
                     if permanente
-                    else shutil.move(
-                        alvo,
-                        os.path.join(
-                            os.path.expanduser("~"), "Desktop", "lixo_" + nome
-                        ),
-                    )
+                    else shutil.move(alvo, os.path.join(lixo, nome or "arquivo"))
                 )
-            return f"'{alvo}' removido."
+            return "Removido."
         if acao == "disk":
-            total, usado, livre = shutil.disk_usage("/")
-            return f"Disco: {livre // (1024**3)} GB livres de {total // (1024**3)} GB."
-        return f"Ação '{acao}' não reconhecida pelo gerenciador de arquivos."
+            return f"Disco: {shutil.disk_usage('/')[2] // (1024**3)} GB livres."
+        return "Ação FS não reconhecida."
     except Exception as e:
-        return f"Erro no gerenciador de arquivos: {e}"
+        return f"Erro FS: {e}"
 
 
 def gerenciador_memoria(argumentos: dict):
-    categoria = argumentos.get("category")
-    chave = argumentos.get("key")
-    valor = argumentos.get("value")
-    if not all([categoria, chave, valor]):
-        return (
-            "Indexação de memória de longo prazo falhou devido a argumentos ausentes."
-        )
-
-    resultado = update_memory({categoria: {chave: valor}})
-    sucesso = isinstance(resultado, dict)
     return (
-        f"Dados gravados com sucesso na minha memória de longo prazo. Setor: {categoria}."
-        if sucesso
-        else "Falha crítica ao persistir dados na estrutura de memória interna."
+        "Dados gravados."
+        if isinstance(
+            update_memory(
+                {
+                    argumentos.get("category"): {
+                        argumentos.get("key"): argumentos.get("value")
+                    }
+                }
+            ),
+            dict,
+        )
+        else "Falha na memória."
     )
 
 
 def gerenciador_plano(argumentos: dict):
     from engine.ia_router import router
 
-    objetivo = argumentos.get("goal", "").strip()
-    contexto = argumentos.get("context", "")
-    if not objetivo:
-        return "Estrutura de planejamento vazia. Por favor, forneça o objetivo central."
-
-    coro = router.responder(
-        f"Crie um plano estruturado para: {objetivo}. Contexto extra: {contexto}"
-    )
-    resultado = executar_no_loop_atual(coro)
-    return (
-        resultado
-        or f"Matriz de planejamento tático calculada para o objetivo: '{objetivo}'. Pronto para execução, Senhor."
+    obj = argumentos.get("goal", "").strip()
+    if not obj:
+        return "Objetivo vazio."
+    return executar_no_loop_atual(
+        router.responder(
+            f"Crie um plano estruturado para: {obj}. Contexto extra: {argumentos.get('context', '')}"
+        )
     )
 
 
 def gerenciador_codigo(argumentos: dict):
     from engine.ia_router import router
 
-    descricao = argumentos.get("description", "")
-    linguagem = argumentos.get("language", "python")
-    codigo_base = argumentos.get("code", "")
-    executar_flag = argumentos.get("execute", False)
+    if not argumentos.get("description", ""):
+        return "Impossível programar sem descrição."
+    lang = argumentos.get("language", "python")
+    cod = executar_no_loop_atual(
+        router.responder(
+            f"Gere APENAS código {lang}: {argumentos['description']}. {argumentos.get('code', '')}"
+        )
+    )
+    if argumentos.get("execute", False) and cod:
+        import shlex, re
 
-    if not descricao:
-        return "Impossível programar sem especificações funcionais na descrição."
-
-    comando_ia = f"Gere APENAS código {linguagem}: {descricao}. {codigo_base}"
-    codigo_gerado = executar_no_loop_atual(router.responder(comando_ia))
-
-    if executar_flag and codigo_gerado:
-        import shlex
-
-        import re as _re
-
-        match = _re.search(r"```(?:\w+)?\n([\s\S]+?)```", codigo_gerado)
-        codigo_limpo = match.group(1).strip() if match else codigo_gerado.strip()
-        if linguagem == "python":
-            cmd = f"python -c {shlex.quote(codigo_limpo)}"
-        else:
-            cmd = f"bash -c {shlex.quote(codigo_limpo)}"
+        bt = "`" * 3
+        match = re.search(rf"{bt}(?:\w+)?\n([\s\S]+?){bt}", cod)
+        cmd = (
+            f"python -c {shlex.quote(match.group(1).strip() if match else cod.strip())}"
+            if lang == "python"
+            else f"bash -c {shlex.quote(match.group(1).strip() if match else cod.strip())}"
+        )
         av = avaliar(cmd)
         if not av.permitido:
-            return (
-                f"Compilação bloqueada pela diretiva de proteção do núcleo: {av.motivo}"
-            )
+            return f"Bloqueado: {av.motivo}"
         executar(cmd, timeout=15, ferramenta="code_helper")
-        return f"Algoritmo em {linguagem} gerado, compilado e injetado no sistema com sucesso, Senhor."
-
-    return (
-        codigo_gerado
-        if codigo_gerado
-        else "O compilador de inteligência artificial falhou ao estruturar a lógica."
-    )
+        return "Código executado."
+    return cod or "Falha gerando código."
 
 
 def gerenciador_visao(argumentos: dict):
     from vision.capture import analisar_tela
 
-    pergunta = argumentos.get(
-        "question", "Analisa e descreve o que está na tela agora."
+    executar_no_loop_atual(
+        analisar_tela(argumentos.get("question", "Descreva o ecrã."))
     )
-    executar_no_loop_atual(analisar_tela(pergunta))
-    return "Sensores ópticos ativados. Varredura completa da tela realizada com sucesso, Senhor."
+    return "Análise ativada."
 
 
 def gerenciador_troca_ia(argumentos: dict):
     from engine.ia_router import router
 
-    modo = argumentos.get("mode", "ollama").lower()
-    router.definir_modo(modo)
-    return f"Redirecionando sinapses neurais. Motores cognitivos alternados para o modo {modo}, Senhor."
+    router.definir_modo(argumentos.get("mode", "ollama").lower())
+    return "IA alternada."
 
 
 def gerenciador_agente_visual(argumentos: dict):
-    tarefa = argumentos.get("task", "")
-    if not tarefa:
-        return "Nenhuma instrução operacional foi passada para o atuador de interface gráfica."
-
-    wrapper_path = os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "..", "agent_s_wrapper.py")
-    )
-    try:
-        processo = subprocess.run(
-            ["python", wrapper_path, tarefa, "--json"],
-            capture_output=True,
-            text=True,
-            timeout=300,
-        )
-        if processo.returncode == 0:
-            try:
-                dados = json.loads(processo.stdout)
-                return f"Automação de interface finalizada pelo Gui Actuator. Status: {dados.get('status')}. Resposta: {dados.get('message')}"
-            except Exception:
-                return f"Comando de interface executado. Retorno bruto do atuador: {processo.stdout[:200]}"
-        return f"Falha na manipulação física da interface gráfica. Erro de barramento: {processo.stderr[:200]}"
-    except subprocess.TimeoutExpired:
-        return "A rotina operacional excedeu o tempo limite de segurança de 5 minutos estabelecido para o Agente S."
-    except Exception as e:
-        return f"Erro crítico na camada de abstração de UI: {e}"
+    return "Agente S necessita adaptação modular no Linux."
 
 
 def gerenciador_visao_3d(argumentos: dict):
@@ -393,24 +324,23 @@ def gerenciador_visao_3d(argumentos: dict):
         from vision.capture import MotorVisaoEspacial
         import cv2
 
-        motor_3d = MotorVisaoEspacial()
-        cap = cv2.VideoCapture(0)
+        motor, cap = MotorVisaoEspacial(), cv2.VideoCapture(0)
         ret, frame = cap.read()
         cap.release()
         if not ret:
-            return "Falha de hardware. Módulo óptico e câmeras tridimensionais inacessíveis para triangulação de profundidade."
-
-        resultado = motor_3d.analisar_medida_cena(frame)
-        if resultado["status"] == "sucesso":
-            return f"Mapeamento tridimensional concluído. Escala espacial: {resultado['pixels_por_cm']} px/cm. Profundidade relativa calculada, Senhor."
-        return f"Erro no processamento da malha geométrica 3D: {resultado['motivo']}"
+            return "Câmera inacessível."
+        res = motor.analisar_medida_cena(frame)
+        return (
+            f"Mapeamento OK. Escala: {res['pixels_por_cm']} px/cm."
+            if res["status"] == "sucesso"
+            else f"Erro 3D: {res['motivo']}"
+        )
     except Exception as e:
-        return f"O subsistema de fotogrametria e análise volumétrica falhou: {e}"
+        return f"Falha 3D: {e}"
 
 
 def gerenciador_traducao_audio(argumentos: dict):
-    segundos = argumentos.get("segundos", 10)
-    return f"Captando frequências sonoras do ambiente por {segundos} segundos para tradução simultânea em tempo real. Módulos em calibração, Senhor."
+    return f"Escutando para traduzir ({argumentos.get('segundos', 10)}s)."
 
 
 def gerenciador_otimizacao_dados(argumentos: dict):
@@ -418,12 +348,12 @@ def gerenciador_otimizacao_dados(argumentos: dict):
         from storage.optimizer import comprimir_banco_auditoria
 
         executar_no_loop_atual(comprimir_banco_auditoria())
-        return "Banco de dados desfragmentado e índices otimizados para máxima performance, Senhor."
+        return "Banco otimizado."
     except Exception as e:
-        return f"Falha no algoritmo de compressão e otimização de armazenamento: {e}"
+        return f"Falha DB: {e}"
 
 
-EXECUTOR_FERRAMENTAS: dict[str, Callable[[dict], str]] = {
+EXECUTOR_FERRAMENTAS = {
     "open_app": gerenciador_open_app,
     "computer_control": gerenciador_computador,
     "cmd_control": gerenciador_cmd,
@@ -449,14 +379,9 @@ EXECUTOR_FERRAMENTAS: dict[str, Callable[[dict], str]] = {
 
 async def despachar(nome: str, args: dict):
     func = EXECUTOR_FERRAMENTAS.get(nome)
-
-    if func is None:
-        log.error(f"Tentativa de usar ferramenta fantasma: {nome}")
-        return f"Falha de link: A ferramenta de codinome '{nome}' não está registrada no kernel principal."
-
+    if not func:
+        return f"Falha: Ferramenta '{nome}' inválida."
     try:
-        loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, func, args)
+        return await asyncio.get_running_loop().run_in_executor(None, func, args)
     except Exception as e:
-        log.error(f"Erro fatal na execução da ferramenta '{nome}': {e}")
-        return f"A ferramenta {nome} sofreu uma falha crítica de hardware ou runtime durante a execução."
+        return f"Erro na ferramenta {nome}: {e}"

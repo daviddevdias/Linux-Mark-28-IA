@@ -530,7 +530,6 @@ async def alarme(cmd: str):
         else:
             m2 = re.search(r"(\d{1,2})", cmd)
             hora = f"{int(m2.group(1)):02d}:00" if m2 else None
-
         if not hora:
             return "Diga a data e hora do alarme."
     return adicionar_alarme(hora, missao or "Alarme agendado", data=data_iso)

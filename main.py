@@ -14,6 +14,8 @@ from app_ul.interface import JarvisUI
 from storage.wake import processar_wake, resposta_ativacao_aleatoria
 from integrations.telegram_bridge_auth_patch import iniciar_telegram
 
+os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--no-sandbox --log-level=3"
+
 faulthandler.enable()
 os.environ.update(
     {

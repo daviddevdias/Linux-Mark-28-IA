@@ -1,17 +1,11 @@
 from __future__ import annotations
-
-import logging
-import threading
-import time
+import logging, threading, time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Callable
 
 log = logging.getLogger("jarvis.watchdog")
-
-INTERVALO_CHECK = 30.0
-MAX_FALHAS = 3
-COOLDOWN_RESET = 60.0
+INTERVALO_CHECK, MAX_FALHAS, COOLDOWN_RESET = 30.0, 3, 60.0
 
 
 class StatusModulo(Enum):
@@ -34,7 +28,6 @@ class RegistroModulo:
 
 
 class Watchdog:
-
     def __init__(self):
         self.modulos: dict[str, RegistroModulo] = {}
         self.lock = threading.Lock()
@@ -52,103 +45,69 @@ class Watchdog:
             self.modulos[nome] = RegistroModulo(
                 nome=nome, check_fn=check_fn, reset_fn=reset_fn
             )
-        log.info("[Watchdog] Módulo '%s' registrado.", nome)
 
-    def checar(self, reg: RegistroModulo):
-        agora = time.time()
-        reg.ultimo_check = agora
-        try:
-            ok = reg.check_fn()
-        except Exception as exc:
-            ok = False
-            log.warning("[Watchdog] check '%s' lançou exceção: %s", reg.nome, exc)
-
-        if ok:
-            if reg.falhas > 0:
-                log.info(
-                    "[Watchdog] '%s' recuperado após %d falha(s).", reg.nome, reg.falhas
-                )
+    def _loop(self):
+        while not self.stop_event.is_set():
+            agora = time.time()
+            for nome, reg in list(self.modulos.items()):
+                if agora - reg.ultimo_check < INTERVALO_CHECK:
+                    continue
                 try:
-                    from brain.event_bus import bus, MODULO_RECUPERADO
-
-                    bus.publicar(MODULO_RECUPERADO, {"modulo": reg.nome})
+                    ok = reg.check_fn()
+                    with self.lock:
+                        reg.ultimo_check = agora
+                        if ok:
+                            reg.falhas = 0
+                            reg.status = StatusModulo.OK
+                        else:
+                            reg.falhas += 1
+                            reg.status = (
+                                StatusModulo.DEGRADADO
+                                if reg.falhas < MAX_FALHAS
+                                else StatusModulo.FALHOU
+                            )
+                            if (
+                                reg.status == StatusModulo.FALHOU
+                                and reg.reset_fn
+                                and (agora - reg.ultimo_reset > COOLDOWN_RESET)
+                            ):
+                                reg.status = StatusModulo.REINICIANDO
+                                reg.ultimo_reset = agora
+                                threading.Thread(
+                                    target=self._tentar_reset, args=(reg,), daemon=True
+                                ).start()
                 except Exception:
                     pass
+            self.stop_event.wait(5.0)
 
-            reg.falhas = 0
-            reg.status = StatusModulo.OK
-        else:
-            reg.falhas += 1
-            log.warning(
-                "[Watchdog] '%s' falhou (%d/%d).", reg.nome, reg.falhas, MAX_FALHAS
-            )
-            reg.status = (
-                StatusModulo.DEGRADADO
-                if reg.falhas < MAX_FALHAS
-                else StatusModulo.FALHOU
-            )
-            if reg.falhas >= MAX_FALHAS:
-                try:
-                    from brain.event_bus import bus, ERRO_MODULO
-
-                    bus.publicar(
-                        ERRO_MODULO, {"modulo": reg.nome, "falhas": reg.falhas}
-                    )
-                except Exception:
-                    pass
-
-                if reg.reset_fn and (agora - reg.ultimo_reset) > COOLDOWN_RESET:
-                    self.resetar(reg)
-
-        reg.historico.append({"ts": agora, "ok": ok})
-        if len(reg.historico) > 50:
-            reg.historico = reg.historico[-50:]
-
-    def resetar(self, reg: RegistroModulo):
-        reg.status = StatusModulo.REINICIANDO
-        log.info("[Watchdog] Reiniciando '%s'...", reg.nome)
+    def _tentar_reset(self, reg: RegistroModulo):
         try:
-            reg.reset_fn()
-            reg.falhas = 0
-            reg.ultimo_reset = time.time()
-            reg.status = StatusModulo.OK
-            log.info("[Watchdog] '%s' reiniciado com sucesso.", reg.nome)
-        except Exception as exc:
-            log.error("[Watchdog] Falha ao reiniciar '%s': %s", reg.nome, exc)
-            reg.status = StatusModulo.FALHOU
-
-    def loop_watchdog(self):
-        while self.rodando:
+            if reg.reset_fn:
+                reg.reset_fn()
             with self.lock:
-                modulos = list(self.modulos.values())
-            for reg in modulos:
-                try:
-                    self.checar(reg)
-                except Exception as exc:
-                    log.error("[Watchdog] Erro interno em '%s': %s", reg.nome, exc)
-
-            self.stop_event.wait(timeout=INTERVALO_CHECK)
-            self.stop_event.clear()
+                reg.falhas = 0
+                reg.status = StatusModulo.OK
+        except Exception:
+            with self.lock:
+                reg.status = StatusModulo.FALHOU
 
     def iniciar(self):
-        if self.rodando:
-            return
-
-        self.stop_event.clear()
-        self.rodando = True
-        self.thread = threading.Thread(
-            target=self.loop_watchdog, daemon=True, name="Watchdog"
-        )
-        self.thread.start()
-        log.info("[Watchdog] Iniciado.")
+        with self.lock:
+            if self.rodando:
+                return
+            self.rodando = True
+            self.stop_event.clear()
+            self.thread = threading.Thread(
+                target=self._loop, daemon=True, name="Watchdog"
+            )
+            self.thread.start()
 
     def parar(self):
-        self.rodando = False
-        self.stop_event.set()
+        with self.lock:
+            self.rodando = False
+            self.stop_event.set()
         if self.thread and self.thread.is_alive():
             self.thread.join(timeout=2.0)
-
-        log.info("[Watchdog] Parado.")
 
     def get_status(self) -> dict:
         with self.lock:
@@ -189,8 +148,8 @@ def reset_ia():
         loop = asyncio.new_event_loop()
         loop.run_until_complete(asyncio.wait_for(detectar_modelo(), timeout=10))
         loop.close()
-    except Exception as exc:
-        raise RuntimeError(f"reset IA: {exc}")
+    except Exception:
+        pass
 
 
 def check_audio() -> bool:
@@ -204,5 +163,4 @@ def check_audio() -> bool:
 
 def registrar_modulos_padrao():
     watchdog.registrar("ia", check_ia, reset_ia)
-    watchdog.registrar("audio", check_audio, None)
-    watchdog.registrar("audio", check_audio, None)
+    watchdog.registrar("audio", check_audio)

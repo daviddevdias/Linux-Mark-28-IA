@@ -9,7 +9,7 @@ log = logging.getLogger("jarvis.cmd_security")
 _DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs", "audit.db")
 
 
-def _get_conn() -> sqlite3.Connection:
+def get_conn() -> sqlite3.Connection:
     os.makedirs(os.path.dirname(_DB_PATH), exist_ok=True)
     conn = sqlite3.connect(_DB_PATH, check_same_thread=False, timeout=5)
     conn.execute(
@@ -20,16 +20,16 @@ def _get_conn() -> sqlite3.Connection:
     return conn
 
 
-def _audit(
+def audit(
     comando: str,
     resultado: str = "",
     bloqueado: bool = False,
     motivo: str = "",
     origem: str = "cmd",
     ferramenta: str = "",
-):
+) -> None:
     try:
-        with _get_conn() as conn:
+        with get_conn() as conn:
             conn.execute(
                 "INSERT INTO audit_log (ts, origem, ferramenta, comando, resultado, bloqueado, motivo) VALUES (?,?,?,?,?,?,?)",
                 (
@@ -43,8 +43,8 @@ def _audit(
                 ),
             )
             conn.commit()
-    except Exception as e:
-        log.error("[Audit] Falha: %s", e)
+    except:
+        pass
 
 
 class Categoria(Enum):
@@ -154,7 +154,7 @@ def sanitizar(cmd: str):
     return re.sub(r"\s+", " ", cmd.strip())
 
 
-def tem_injecao(cmd: str) -> bool:
+def tem_injecao(cmd: str):
     return any(s in cmd.lower() for s in INJECOES)
 
 
@@ -164,13 +164,11 @@ def avaliar(comando: str) -> Avaliacao:
         return Avaliacao(permitido=False, motivo="Comando vazio.")
     for padrao in BLOQUEIOS_COMPILADOS:
         if padrao.search(cmd):
-            log.warning("Bloqueado: %s", cmd[:80])
-            _audit(cmd, bloqueado=True, motivo="Padrão proibido.")
+            audit(cmd, bloqueado=True, motivo="Padrão proibido.")
             return Avaliacao(permitido=False, motivo="Padrão proibido detectado.")
     if tem_injecao(cmd):
-        log.warning("Injeção detectada: %s", cmd[:80])
-        _audit(cmd, bloqueado=True, motivo="Operadores de encadeamento suspeitos.")
-        return Avaliacao(permitido=False, motivo="Operadores suspeitos (;, &&, ||).")
+        audit(cmd, bloqueado=True, motivo="Operadores suspeitos.")
+        return Avaliacao(permitido=False, motivo="Operadores suspeitos detectados.")
     for regra in REGRAS:
         if regra.padrao.match(cmd):
             return Avaliacao(
@@ -197,7 +195,7 @@ def executar(
 ):
     av = avaliar(comando)
     if not av.permitido:
-        _audit(
+        audit(
             comando,
             resultado=f"BLOQUEADO: {av.motivo}",
             bloqueado=True,
@@ -210,7 +208,7 @@ def executar(
         if confirmar_fn is None:
             return f"Comando '{av.categoria.value}' requer confirmação."
         if not confirmar_fn(comando, av):
-            _audit(
+            audit(
                 comando,
                 resultado="CANCELADO pelo usuário",
                 origem=origem,
@@ -224,25 +222,20 @@ def executar(
         res = subprocess.run(
             args, shell=usar_shell, capture_output=True, text=True, timeout=timeout
         )
-        saida = (res.stdout or res.stderr or "Executado sem saída.").strip()
-        saida_truncada = saida[:600]
-        _audit(cmd, resultado=saida_truncada, origem=origem, ferramenta=ferramenta)
-        return saida_truncada
+        saida = (res.stdout or res.stderr or "Executado sem saída.").strip()[:600]
+        audit(cmd, resultado=saida, origem=origem, ferramenta=ferramenta)
+        return saida
     except subprocess.TimeoutExpired:
         msg = f"Timeout: {timeout}s."
-        _audit(cmd, resultado=msg, origem=origem, ferramenta=ferramenta)
-        return msg
-    except FileNotFoundError:
-        msg = f"Comando não encontrado: {cmd.split()[0]}"
-        _audit(cmd, resultado=msg, origem=origem, ferramenta=ferramenta)
+        audit(cmd, resultado=msg, origem=origem, ferramenta=ferramenta)
         return msg
     except Exception as e:
         msg = f"Erro: {e}"
-        _audit(cmd, resultado=msg, origem=origem, ferramenta=ferramenta)
+        audit(cmd, resultado=msg, origem=origem, ferramenta=ferramenta)
         return msg
 
 
-def validar_codigo_ast(codigo_fonte: str) -> bool:
+def validar_codigo_ast(codigo_fonte: str):
     proibidos_mod = {"os", "sys", "shutil", "subprocess", "socket", "requests", "pty"}
     proibidos_fn = {
         "eval",
@@ -275,7 +268,7 @@ def validar_codigo_ast(codigo_fonte: str) -> bool:
 
 def audit_recente(limite: int = 50) -> list[dict]:
     try:
-        with _get_conn() as conn:
+        with get_conn() as conn:
             return [
                 dict(r)
                 for r in conn.execute(
