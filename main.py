@@ -1,5 +1,5 @@
 from __future__ import annotations
-import os, sys, faulthandler, asyncio, logging, threading
+import sys, faulthandler, asyncio, logging, threading
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication
 import config
@@ -12,6 +12,7 @@ from app_ul.interface import JarvisUI
 from tasks.wake import processar_wake, resposta_ativacao_aleatoria
 from integrations.telegram_bridge_auth_patch import iniciar_telegram
 
+import os
 os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--no-sandbox --log-level=3"
 
 faulthandler.enable()
