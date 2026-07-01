@@ -1,5 +1,7 @@
 import asyncio
 import json
+import os
+import platform
 from pathlib import Path
 import config
 import psutil
@@ -157,7 +159,7 @@ def montar_biblioteca_comandos() -> list[dict]:
 async def run_test_voice():
     from audio.voz import falar
 
-    await falar("PainelJARVIS operacional no Linux.")
+    await falar("Painel JARVIS operacional no Windows.")
 
 
 class JarvisBridge(QObject):
@@ -222,7 +224,7 @@ class JarvisBridge(QObject):
 
     @pyqtSlot(result=str)
     def obter_biblioteca_comandos(self) -> str:
-        return json.dumps(montar_biblioteca_comandos())
+        return json.dumps(montar_biblioteca_comandos(), ensure_ascii=False)
 
     @pyqtSlot(result=str)
     def obter_configuracoes_atuais(self) -> str:
@@ -243,7 +245,9 @@ class JarvisBridge(QObject):
                 "spotify_id": getattr(config, "SPOTIFY_ID", ""),
                 "spotify_sec": getattr(config, "SPOTIFY_SECRET", ""),
                 "smartthings": getattr(config, "SMARTTHINGS_TOKEN", ""),
+                "smartthings_tv_id": getattr(config, "SMARTTHINGS_TV_DEVICE_ID", ""),
                 "whisper_model": getattr(config, "WHISPER_MODEL", "small"),
+                "deepgram_api_key": getattr(config, "DEEPGRAM_API_KEY", ""),
                 "nome_mestre": getattr(config, "NOME_MESTRE", "Chefe"),
                 "voz": getattr(config, "voz_atual", "pt-BR-AntonioNeural"),
                 "device_index": getattr(config, "DEVICE_INDEX", 1),
@@ -304,9 +308,85 @@ class JarvisBridge(QObject):
 
     @pyqtSlot(result=str)
     def get_status(self) -> str:
-        return json.dumps(
-            {"cpu": self.cpu_atual, "ram": self.ram_atual, "online": True}
-        )
+        return self.obter_status_completo()
+
+    @pyqtSlot(result=str)
+    def obter_status_completo(self) -> str:
+        try:
+            from tasks.monitor import status_hardware, alertas_recentes
+            from engine.ia_router import router
+
+            hw = status_hardware()
+            disco = psutil.disk_usage(os.environ.get("SystemDrive", "C:") + "\\")
+            dados = {
+                "online": True,
+                "sistema": platform.platform(),
+                "python": platform.python_version(),
+                "cpu": hw.get("cpu_percent", self.cpu_atual),
+                "ram": hw.get("ram_percent", self.ram_atual),
+                "temperatura": hw.get("temp_cpu"),
+                "disco": hw.get("disco_percent", round(disco.percent, 1)),
+                "bateria": hw.get("bateria_percent"),
+                "carregando": hw.get("carregando"),
+                "alertas": hw.get("alertas", {}),
+                "alertas_recentes": alertas_recentes(8),
+                "visao": status_monitor(),
+                "ia_status": router.status,
+            }
+            return json.dumps(dados, ensure_ascii=False)
+        except Exception as e:
+            return json.dumps({"online": False, "erro": str(e)}, ensure_ascii=False)
+
+    @pyqtSlot(str)
+    def executar_acao_rapida(self, acao: str):
+        comandos = {
+            "bloquear": "bloquear",
+            "minimizar": "minimizar",
+            "fechar": "fechar",
+            "screenshot": "screenshot",
+            "lixeira": "limpar lixeira",
+            "silencio": "silencio",
+            "trabalho": "trabalho",
+            "monitorar": "monitorar tela",
+            "parar_monitor": "desligar monitor",
+            "status_monitor": "monitor status",
+            "tv_on": "ligar tv",
+            "tv_off": "desligar tv",
+            "tv_youtube": "youtube tv",
+            "spotify_pause": "pausar",
+            "spotify_play": "continuar",
+            "spotify_next": "proxima",
+            "spotify_prev": "anterior",
+            "parar_alarme": "parar alarme",
+        }
+        self.executar_comando(comandos.get(acao, acao))
+
+    @pyqtSlot(str)
+    def abrir_app_painel(self, nome: str):
+        try:
+            from tasks.open_app import open_app
+
+            msg = open_app({"app_name": nome})
+            self.dados_para_ui.emit(json.dumps({"resposta": msg}, ensure_ascii=False))
+        except Exception as e:
+            self.dados_para_ui.emit(json.dumps({"erro": str(e)}, ensure_ascii=False))
+
+    @pyqtSlot(result=str)
+    def obter_apps_painel(self) -> str:
+        try:
+            from tasks.open_app import APP_ALIASES
+
+            apps = sorted(
+                [
+                    {"nome": nome, "alvo": alvo}
+                    for nome, alvo in APP_ALIASES.items()
+                    if nome not in {"google", "configuracoes", "configurações"}
+                ],
+                key=lambda x: x["nome"],
+            )
+            return json.dumps(apps, ensure_ascii=False)
+        except Exception:
+            return "[]"
 
     @pyqtSlot()
     def solicitar_analise_visual(self):
@@ -356,6 +436,22 @@ class JarvisBridge(QObject):
         if main_async_loop and not main_async_loop.is_closed():
             asyncio.run_coroutine_threadsafe(self.rotina_clima(cidade), main_async_loop)
 
+    @pyqtSlot(str)
+    def solicitar_clima_texto(self, cidade: str):
+        global main_async_loop
+        if main_async_loop and not main_async_loop.is_closed():
+            asyncio.run_coroutine_threadsafe(self.rotina_clima_texto(cidade), main_async_loop)
+
+    async def rotina_clima_texto(self, cidade: str):
+        try:
+            from tasks.weather import obter_previsao_hoje, verificar_chuva_amanha
+
+            hoje = await asyncio.get_running_loop().run_in_executor(None, obter_previsao_hoje, cidade)
+            amanha = await asyncio.get_running_loop().run_in_executor(None, verificar_chuva_amanha, cidade)
+            self.dados_para_ui.emit(json.dumps({"clima_texto": {"hoje": hoje, "amanha": amanha, "cidade": cidade}}, ensure_ascii=False))
+        except Exception as e:
+            self.dados_para_ui.emit(json.dumps({"erro": f"Clima: {e}"}, ensure_ascii=False))
+
     async def rotina_clima(self, cidade: str):
         try:
             from tasks.weather import obter_clima_raw
@@ -376,7 +472,7 @@ class JarvisBridge(QObject):
         try:
             from tasks.alarm import carregar_alarmes
 
-            return json.dumps(carregar_alarmes())
+            return json.dumps(carregar_alarmes(), ensure_ascii=False)
         except:
             return "[]"
 
@@ -437,6 +533,21 @@ class JarvisBridge(QObject):
             gerenciador_alarmes.limpar_alarmes_concluidos()
         except:
             pass
+
+    @pyqtSlot(result=str)
+    def exportar_estado_painel(self) -> str:
+        try:
+            return json.dumps(
+                {
+                    "config": json.loads(self.obter_configuracoes_atuais()),
+                    "status": json.loads(self.obter_status_completo()),
+                    "alarmes": json.loads(self.obter_alarmes()),
+                    "comandos": montar_biblioteca_comandos(),
+                },
+                ensure_ascii=False,
+            )
+        except Exception as e:
+            return json.dumps({"erro": str(e)}, ensure_ascii=False)
 
 
 class PainelCore(QMainWindow):
@@ -503,7 +614,7 @@ class PainelCore(QMainWindow):
         try:
             cpu, ram = psutil.cpu_percent(), psutil.virtual_memory().percent
             self.bridge.cpu_atual, self.bridge.ram_atual = cpu, ram
-            self.enviar_para_html(json.dumps({"cpu": cpu, "ram": ram}))
+            self.enviar_para_html(json.dumps({"cpu": cpu, "ram": ram}, ensure_ascii=False))
         except:
             pass
 

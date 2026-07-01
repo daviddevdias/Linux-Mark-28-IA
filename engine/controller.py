@@ -6,10 +6,6 @@ from typing import Any, Awaitable, Callable, Optional
 import aiohttp
 import config
 from engine.tools import TOOL_DECLARATIONS
-from vision.capture import (
-    status_monitor as info_monitor,
-    parar_monitor as desligar_monitor,
-)
 
 log = logging.getLogger("engine.controller")
 
@@ -113,21 +109,6 @@ async def check(force: bool = False):
     await detectar_modelo()
 
 
-def ligar_monitor(intervalo_s: float = 10.0, callback=None):
-    from vision.capture import iniciar_monitor, MonitorConfig
-
-    cfg = MonitorConfig(intervalo_s=intervalo_s, callback=callback)
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = None
-    if loop and loop.is_running():
-        asyncio.run_coroutine_threadsafe(iniciar_monitor(cfg), loop)
-    else:
-        asyncio.run(iniciar_monitor(cfg))
-
-
-class Historico:
     def __init__(self):
         self.turns = deque(maxlen=MAX_HIST)
 
@@ -148,7 +129,6 @@ class Historico:
 
 class IARRouter:
     def __init__(self):
-        self.historico = Historico()
         self.provedor = "lmstudio"
         self.humor = "neutro"
         self.acoes_sessao: list[str] = []

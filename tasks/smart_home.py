@@ -86,9 +86,11 @@ def carregar_devices(force=False):
 
 
 def enviar_comando(dev_id, cmd, cap, args=None):
+    if not dev_id:
+        return False
     return post_api(
         "devices/" + dev_id + "/commands",
-        [{"component": "main", "command": cmd, "arguments": args or []}],
+        [{"component": "main", "capability": cap, "command": cmd, "arguments": args or []}],
     )
 
 
@@ -129,12 +131,12 @@ def buscar_tv():
 
 def ligar_tv():
     t = buscar_tv()
-    return enviar_comando(t, "switch", "switch", []) if t else False
+    return enviar_comando(t, "on", "switch", []) if t else False
 
 
 def desligar_tv():
     t = buscar_tv()
-    return enviar_comando(t, "switch", "switch", []) if t else False
+    return enviar_comando(t, "off", "switch", []) if t else False
 
 
 def status_tv():
@@ -148,3 +150,36 @@ def status_tv():
         return "TV " + d["components"]["main"]["switch"]["switch"]["value"].upper()
     except:
         return "Status indisponível"
+
+def buscar_id_tv():
+    return buscar_tv()
+
+
+def energia_tv(ligar: bool):
+    return ligar_tv() if ligar else desligar_tv()
+
+
+def enviar_comando_tv(cmd, cap="switch", args=None):
+    return enviar_comando(buscar_tv(), cmd, cap, args)
+
+
+def abrir_youtube_tv():
+    tv = buscar_tv()
+    if not tv:
+        return "TV não encontrada."
+    tentativas = [
+        ("launchApp", "custom.launchapp", ["YouTube"]),
+        ("setInputSource", "mediaInputSource", ["YouTube"]),
+    ]
+    for cmd, cap, args in tentativas:
+        if enviar_comando(tv, cmd, cap, args):
+            return "Abrindo YouTube na TV."
+    return "Não consegui abrir o YouTube pela API SmartThings."
+
+
+def diagnosticar_falha_tv():
+    if not config.SMARTTHINGS_TOKEN:
+        return "Configure o SMARTTHINGS_TOKEN no painel."
+    if not carregar_devices(force=True):
+        return "Não encontrei dispositivos SmartThings. Verifique token e internet."
+    return "TV não encontrada. Configure SMARTTHINGS_TV_DEVICE_ID ou renomeie a TV no SmartThings."

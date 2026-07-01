@@ -222,16 +222,6 @@ body {
   box-shadow: 0 0 5px var(--accent2);
 }
 
-.sb-metric {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 10px;
-  color: var(--muted);
-}
-
-
-
 .bar-wrap {
   flex: 1;
   height: 3px;
@@ -246,11 +236,6 @@ body {
   width: 0%;
   transition: width 0.5s;
   border-radius: 3px;
-}
-
-.sb-val {
-  width: 22px;
-  text-align: right;
 }
 
 .btn-hide {
@@ -818,12 +803,6 @@ body {
   align-items: center;
 }
 
-field-row-inline placeholder {
-  font-size: 11px;
-  font-weight: bold;
-  font-family: "Roboto", sans-serif;
-}
-
 .ia-btns {
   display: flex;
   gap: 6px;
@@ -872,7 +851,6 @@ field-row-inline placeholder {
   opacity: 1;
 }
 
-/* ── BIBLIOTECA ─────────────────────────── */
 .lib-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));

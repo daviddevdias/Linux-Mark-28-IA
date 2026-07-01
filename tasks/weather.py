@@ -51,6 +51,10 @@ def get_city_config() -> str:
     return getattr(config, "cidade_padrao", "Esteio,BR")
 
 
+def get_cidade_painel() -> str:
+    return get_city_config()
+
+
 def cache_get(key: str):
     if key in cache:
         data, ts = cache[key]

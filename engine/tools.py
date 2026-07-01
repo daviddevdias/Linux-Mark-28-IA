@@ -20,13 +20,13 @@ TOOL_DECLARATIONS = [
         "type": "function",
         "function": {
             "name": "computer_control",
-            "description": "Controla o PC: minimizar janelas, screenshot, bloquear tela, limpar lixeira, volume, status.",
+            "description": "Controla o PC no Windows: minimizar janelas, screenshot, bloquear tela, limpar lixeira, volume, mute, digitar texto e enviar atalhos.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "action": {
                         "type": "string",
-                        "description": "Acao: 'fechar', 'minimizar_tudo', 'print', 'bloqueio', 'limpar', 'status', 'volume', 'type', 'hotkey'.",
+                        "description": "Acao: 'fechar', 'minimizar_tudo', 'print', 'bloqueio', 'limpar', 'volume', 'mute', 'type', 'hotkey'.",
                     },
                     "nivel": {
                         "type": "integer",

@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 import asyncio, webbrowser, subprocess, os, json, urllib.parse, shutil, pathlib, threading
 from typing import Any, Callable
 from tasks.spotify_manager import spotify_stark
@@ -6,7 +6,6 @@ from tasks.open_app import open_app
 from tasks.weather import obter_previsao_hoje, verificar_chuva_amanha
 from tasks.alarm import adicionar_alarme, listar_alarmes, remover_alarme
 from tasks.computer_control import computer_settings
-from storage.memory_manager import load_memory, update_memory
 from engine.cmd_security import avaliar, executar, audit_recente
 
 log = __import__("logging").getLogger("jarvis.tools_mapper")
@@ -18,7 +17,7 @@ def executar_no_loop_atual(coro) -> Any:
     except RuntimeError:
         return asyncio.run(coro)
     if getattr(loop, "_thread_id", None) == threading.get_ident():
-        raise RuntimeError("Não use executar_no_loop_atual() na mesma thread. Use async.")
+        raise RuntimeError("NÃ£o use executar_no_loop_atual() na mesma thread. Use async.")
     return asyncio.run_coroutine_threadsafe(coro, loop).result(timeout=30)
 
 
@@ -28,8 +27,8 @@ def gerenciador_open_app(argumentos: dict) -> str:
 
 
 def gerenciador_computador(argumentos: dict) -> str:
-    computer_settings(argumentos)
-    return "Configurações de hardware atualizadas."
+    resultado = computer_settings(argumentos)
+    return resultado or "Configurações de hardware atualizadas."
 
 
 def gerenciador_cmd(argumentos: dict) -> str:
@@ -44,20 +43,20 @@ def gerenciador_cmd(argumentos: dict) -> str:
                 .strip().strip("`").strip()
             )
         except Exception as e:
-            return f"Erro crítico: {e}"
+            return f"Erro crÃ­tico: {e}"
     if not comando:
         return "Comando nulo."
     av = avaliar(comando)
     if not av.permitido:
         return f"Bloqueado: {av.motivo}"
-    return f"Executado. Saída: {executar(comando, timeout=20, ferramenta='cmd_control')}"
+    return f"Executado. SaÃ­da: {executar(comando, timeout=20, ferramenta='cmd_control')}"
 
 
 def gerenciador_web_search(argumentos: dict) -> str:
     q = argumentos.get("query", "").strip()
     if q:
         webbrowser.open(f"https://www.google.com/search?q={urllib.parse.quote(q)}")
-    return "Pesquisa enviada para o navegador." if q else "Falha: termo inválido."
+    return "Pesquisa enviada para o navegador." if q else "Falha: termo invÃ¡lido."
 
 
 def gerenciador_browser(argumentos: dict) -> str:
@@ -73,7 +72,7 @@ def gerenciador_browser(argumentos: dict) -> str:
     if url:
         webbrowser.open(url)
         return f"Direcionando para {url}."
-    return "Falha nos parâmetros web."
+    return "Falha nos parÃ¢metros web."
 
 
 def gerenciador_youtube(argumentos: dict) -> str:
@@ -99,7 +98,7 @@ def gerenciador_clima(argumentos: dict) -> str:
     cidade = argumentos.get("city", "")
     prev = argumentos.get("forecast", "hoje").lower()
     if prev == "amanha":
-        return f"Clima amanhã: {verificar_chuva_amanha(cidade)}"
+        return f"Clima amanhÃ£: {verificar_chuva_amanha(cidade)}"
     return f"Clima atual: {obter_previsao_hoje(cidade)}"
 
 
@@ -108,14 +107,14 @@ def gerenciador_alarme(argumentos: dict) -> str:
     if op == "list":
         alarmes = listar_alarmes()
         if isinstance(alarmes, list):
-            return "Alarmes ativos:\n" + "\n".join(f"• {i['hora']} — {i['missao']}" for i in alarmes)
+            return "Alarmes ativos:\n" + "\n".join(f"â€¢ {i['hora']} â€” {i['missao']}" for i in alarmes)
         return str(alarmes)
     if op == "remove":
         remover_alarme(argumentos.get("hora", ""), argumentos.get("missao", ""))
         return "Alarme removido."
     h = argumentos.get("hora", "")
     if not h:
-        return "Impossível criar sem horário."
+        return "ImpossÃ­vel criar sem horÃ¡rio."
     data = argumentos.get("data")
     adicionar_alarme(h, argumentos.get("missao", "Lembrete"), data=data if str(data or "").strip() else None)
     return f"Alarme para {h}."
@@ -134,7 +133,7 @@ def gerenciador_casa_inteligente(argumentos: dict) -> str:
             return "TV desligada." if energia_tv(False) else (diagnosticar_falha_tv() if not buscar_id_tv() else "Falha ao desligar.")
         if acao == "status":
             return status_tv()
-    return "Comando de automação ignorado."
+    return "Comando de automaÃ§Ã£o ignorado."
 
 
 def gerenciador_arquivos(argumentos: dict) -> str:
@@ -165,24 +164,30 @@ def gerenciador_arquivos(argumentos: dict) -> str:
         if acao == "read":
             return pathlib.Path(alvo).read_text(encoding="utf-8", errors="replace")[:1000]
         if acao == "delete":
-            lixo = os.path.join(os.path.expanduser("~"), ".local", "share", "Trash", "files")
-            os.makedirs(lixo, exist_ok=True)
-            destino = os.path.join(lixo, nome or "item")
-            if os.path.isdir(alvo):
-                shutil.rmtree(alvo) if permanente else shutil.move(alvo, destino)
+            if permanente:
+                shutil.rmtree(alvo) if os.path.isdir(alvo) else os.remove(alvo)
             else:
-                os.remove(alvo) if permanente else shutil.move(alvo, destino)
+                try:
+                    from send2trash import send2trash
+
+                    send2trash(alvo)
+                except Exception:
+                    lixeira = os.path.join(os.path.expanduser("~"), "Desktop", "Lixeira_Jarvis")
+                    os.makedirs(lixeira, exist_ok=True)
+                    shutil.move(alvo, os.path.join(lixeira, os.path.basename(alvo)))
             return "Removido."
         if acao == "disk":
-            return f"Disco: {shutil.disk_usage('/')[2] // (1024**3)} GB livres."
-        return "Ação FS não reconhecida."
+            drive = os.path.splitdrive(os.path.abspath(cam))[0]
+            raiz = f"{drive}{os.sep}" if drive else os.path.abspath(os.sep)
+            return f"Disco: {shutil.disk_usage(raiz)[2] // (1024**3)} GB livres."
+        return "AÃ§Ã£o FS nÃ£o reconhecida."
     except Exception as e:
         return f"Erro FS: {e}"
 
 
 def gerenciador_memoria(argumentos: dict) -> str:
     resultado = update_memory({argumentos.get("category"): {argumentos.get("key"): argumentos.get("value")}})
-    return "Dados gravados." if isinstance(resultado, dict) else "Falha na memória."
+    return "Dados gravados." if isinstance(resultado, dict) else "Falha na memÃ³ria."
 
 
 def gerenciador_plano(argumentos: dict) -> str:
@@ -198,10 +203,10 @@ def gerenciador_plano(argumentos: dict) -> str:
 def gerenciador_codigo(argumentos: dict) -> str:
     from engine.ia_router import router
     if not argumentos.get("description", ""):
-        return "Impossível programar sem descrição."
+        return "ImpossÃ­vel programar sem descriÃ§Ã£o."
     lang = argumentos.get("language", "python")
     cod = executar_no_loop_atual(
-        router.responder(f"Gere APENAS código {lang}: {argumentos['description']}. {argumentos.get('code', '')}")
+        router.responder(f"Gere APENAS cÃ³digo {lang}: {argumentos['description']}. {argumentos.get('code', '')}")
     )
     if argumentos.get("execute", False) and cod:
         import shlex, re
@@ -213,14 +218,14 @@ def gerenciador_codigo(argumentos: dict) -> str:
         if not av.permitido:
             return f"Bloqueado: {av.motivo}"
         executar(cmd, timeout=15, ferramenta="code_helper")
-        return "Código executado."
-    return cod or "Falha gerando código."
+        return "CÃ³digo executado."
+    return cod or "Falha gerando cÃ³digo."
 
 
 def gerenciador_visao(argumentos: dict) -> str:
     from vision.capture import analisar_tela
-    executar_no_loop_atual(analisar_tela(argumentos.get("question", "Descreva o ecrã.")))
-    return "Análise ativada."
+    executar_no_loop_atual(analisar_tela(argumentos.get("question", "Descreva o ecrÃ£.")))
+    return "AnÃ¡lise ativada."
 
 
 def gerenciador_troca_ia(argumentos: dict) -> str:
@@ -230,7 +235,7 @@ def gerenciador_troca_ia(argumentos: dict) -> str:
 
 
 def gerenciador_agente_visual(argumentos: dict) -> str:
-    return "Agente S necessita adaptação modular no Linux."
+    return "Agente S necessita adaptaÃ§Ã£o modular no Linux."
 
 
 def gerenciador_visao_3d(argumentos: dict) -> str:
@@ -241,7 +246,7 @@ def gerenciador_visao_3d(argumentos: dict) -> str:
         ret, frame = cap.read()
         cap.release()
         if not ret:
-            return "Câmera inacessível."
+            return "CÃ¢mera inacessÃ­vel."
         res = motor.analisar_medida_cena(frame)
         return f"Mapeamento OK. Escala: {res['pixels_por_cm']} px/cm." if res["status"] == "sucesso" else f"Erro 3D: {res['motivo']}"
     except Exception as e:
@@ -288,8 +293,9 @@ EXECUTOR_FERRAMENTAS: dict[str, Callable] = {
 async def despachar(nome: str, args: dict) -> str:
     func = EXECUTOR_FERRAMENTAS.get(nome)
     if not func:
-        return f"Falha: Ferramenta '{nome}' inválida."
+        return f"Falha: Ferramenta '{nome}' invÃ¡lida."
     try:
         return await asyncio.get_running_loop().run_in_executor(None, func, args)
     except Exception as e:
         return f"Erro na ferramenta {nome}: {e}"
+

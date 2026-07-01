@@ -79,3 +79,27 @@ def controle(acao):
 
 def buscar(termo):
     return f"Tocando {termo}" if tocar_musica(termo) else "Não encontrado"
+
+class SpotifyStark:
+    def abrir_e_buscar(self, termo: str):
+        return buscar(termo)
+
+    def listar_e_tocar_playlist(self, nome: str = ""):
+        return tocar_playlist(nome)
+
+    def tocar_minhas_favoritas(self):
+        return tocar_playlist("")
+
+    def controlar_reproducao(self, acao: str = "playpause"):
+        aliases = {
+            "proxima": "next",
+            "próxima": "next",
+            "anterior": "prev",
+            "voltar": "prev",
+            "pausar": "pause",
+            "continuar": "play",
+        }
+        return controle(aliases.get(str(acao).lower(), acao))
+
+
+spotify_stark = SpotifyStark()

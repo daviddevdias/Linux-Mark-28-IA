@@ -1,4 +1,5 @@
 import json, threading, time
+import re
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -25,6 +26,7 @@ class AlarmManager:
 
     def registrar_callbacks(self, fn, loop):
         self.falar_callback, self.alarm_loop_ativo = fn, loop
+        threading.Thread(target=self.checagem_temporizador_loop, daemon=True, name="Alarmes").start()
 
     def _carregar_alarmes(self):
         if not DB_ALARMES.exists():
@@ -116,14 +118,65 @@ class AlarmManager:
     def checagem_temporizador_loop(self):
         while True:
             h = datetime.now().strftime("%H:%M")
-            for a in self._carregar_alarmes():
+            alarmes = self._carregar_alarmes()
+            alterado = False
+            for a in alarmes:
                 if a.get("status") == "pendente" and a.get("hora") == h:
                     threading.Thread(
                         target=self.deflagrar_rotina_alarme, args=(a,), daemon=True
                     ).start()
                     a["status"] = "concluido"
-            self._salvar_alarmes(self._carregar_alarmes())
+                    alterado = True
+            if alterado:
+                self._salvar_alarmes(alarmes)
             time.sleep(1)
 
 
 gerenciador_alarmes = AlarmManager()
+
+
+def adicionar_alarme(hora, missao="Lembrete", repetir=False, musica="", data=None, dias_semana=None):
+    return gerenciador_alarmes.adicionar_alarme(
+        hora=hora,
+        missao=missao,
+        repetir=repetir,
+        musica=musica,
+        data=data,
+        dias_semana=dias_semana,
+    )
+
+
+def listar_alarmes():
+    return gerenciador_alarmes.listar_alarmes()
+
+
+def remover_alarme(hora, missao="", data=None):
+    return gerenciador_alarmes.remover_alarme(hora, missao, data=data)
+
+
+def carregar_alarmes():
+    return gerenciador_alarmes._carregar_alarmes()
+
+
+def parar_alarme_total():
+    return gerenciador_alarmes.parar_alarme_total()
+
+
+def parse_alarme_voz(cmd: str):
+    texto = (cmd or "").lower()
+    data_iso = None
+    hora = None
+    m_hora = re.search(r"(\d{1,2})\s*[:h]\s*(\d{2})", texto)
+    if m_hora:
+        hora = f"{int(m_hora.group(1)):02d}:{int(m_hora.group(2)):02d}"
+    m_data = re.search(r"(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?", texto)
+    if m_data:
+        ano = int(m_data.group(3) or datetime.now().year)
+        if ano < 100:
+            ano += 2000
+        data_iso = f"{ano:04d}-{int(m_data.group(2)):02d}-{int(m_data.group(1)):02d}"
+    missao = re.sub(r"\b(criar|agendar|alarme|despertar|para|as|às|hoje|amanha|amanhã)\b", " ", texto)
+    missao = re.sub(r"\d{1,2}\s*[:h]\s*\d{2}", " ", missao)
+    missao = re.sub(r"\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?", " ", missao)
+    missao = re.sub(r"\s+", " ", missao).strip() or "Alarme agendado"
+    return data_iso, hora, missao, None

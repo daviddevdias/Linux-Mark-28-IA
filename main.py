@@ -7,11 +7,10 @@ from painel import PainelCore, set_loop
 from audio.voz import ouvir_comando, falar
 from engine.core import processar_comando, inicializar_ia
 from engine.controller import get_shutdown_event
-from storage.memory_bridge import sincronizar_config
 from tasks.monitor import iniciar_sentinela, registrar_falar, registrar_loop_monitor_voz
 from tasks.alarm import gerenciador_alarmes
 from app_ul.interface import JarvisUI
-from storage.wake import processar_wake, resposta_ativacao_aleatoria
+from tasks.wake import processar_wake, resposta_ativacao_aleatoria
 from integrations.telegram_bridge_auth_patch import iniciar_telegram
 
 os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--no-sandbox --log-level=3"
@@ -37,28 +36,6 @@ app.setQuitOnLastWindowClosed(False)
 
 async def executar(cmd: str):
     await processar_comando(cmd)
-
-
-async def engine_loop(ui: PainelCore):
-    await inicializar_ia()
-    iniciar_sentinela()
-    sincronizar_config()
-    try:
-        from brain.event_bus import bus
-        from brain.watchdog import watchdog, registrar_modulos_padrao
-
-        bus.registrar_loop(asyncio.get_running_loop())
-        registrar_modulos_padrao()
-        watchdog.iniciar()
-    except Exception as e:
-        log.warning(f"Watchdog indisponível: {e}")
-    try:
-        from storage.observability import registrar_acao, purgar_antigos
-
-        purgar_antigos(dias=7)
-        registrar_acao("startup", modulo="main", descricao="inicializado", sucesso=True)
-    except:
-        pass
 
     threading.Thread(target=iniciar_telegram, daemon=True, name="telegram").start()
     shutdown = get_shutdown_event()
@@ -90,10 +67,7 @@ def engine_thread(ui: PainelCore):
     except Exception as e:
         log.warning(f"Aviso ao registrar alarmes: {e}")
     registrar_loop_monitor_voz(loop)
-    try:
-        loop.run_until_complete(engine_loop(ui))
-    finally:
-        loop.close()
+
 
 
 def iniciar_sistema():

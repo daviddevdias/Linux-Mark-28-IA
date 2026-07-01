@@ -1,4 +1,4 @@
-import asyncio, inspect, os, sqlite3, psutil, socket, threading, time
+import asyncio, inspect, os, platform, sqlite3, psutil, socket, threading, time
 from datetime import datetime
 
 _DB_PATH = os.path.join(
@@ -93,7 +93,28 @@ def obter_temperatura_cpu() -> float | None:
                     return e[0].current
     except:
         pass
+    if platform.system().lower() == "windows":
+        try:
+            import wmi
+
+            sensores = wmi.WMI(namespace="root\\OpenHardwareMonitor").Sensor()
+            temps = [
+                float(s.Value)
+                for s in sensores
+                if getattr(s, "SensorType", "") == "Temperature"
+                and "cpu" in getattr(s, "Name", "").lower()
+            ]
+            if temps:
+                return max(temps)
+        except:
+            pass
     return None
+
+
+def _raiz_disco() -> str:
+    if platform.system().lower() == "windows":
+        return os.environ.get("SystemDrive", "C:") + "\\"
+    return "/"
 
 
 def checar_rede():
@@ -134,7 +155,7 @@ def checar_bateria():
 
 def checar_disco():
     try:
-        u = psutil.disk_usage("/").percent
+        u = psutil.disk_usage(_raiz_disco()).percent
     except:
         return
     if u >= DISCO_CRITICO and not ALERTAS["disco"]:
@@ -163,7 +184,7 @@ def status_hardware() -> dict:
     b = psutil.sensors_battery()
     t = obter_temperatura_cpu()
     try:
-        d = psutil.disk_usage("/").percent
+        d = psutil.disk_usage(_raiz_disco()).percent
     except:
         d = None
     return {
