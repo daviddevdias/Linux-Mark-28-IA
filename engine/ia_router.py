@@ -1,4 +1,3 @@
-from __future__ import annotations
 from engine.controller import (
     IARRouter,
     Historico,
@@ -9,7 +8,6 @@ from engine.controller import (
     modelo,
     disponivel,
     ultimo_check,
-    ligar_monitor,
     ROUTES,
     buscar_handler,
     processar_diretriz,
@@ -18,7 +16,6 @@ from engine.controller import (
     extrair_termo,
     get_shutdown_event,
 )
-
 
 __all__ = [
     "IARRouter",
@@ -30,9 +27,6 @@ __all__ = [
     "modelo",
     "disponivel",
     "ultimo_check",
-    "info_monitor",
-    "desligar_monitor",
-    "ligar_monitor",
     "ROUTES",
     "buscar_handler",
     "processar_diretriz",
