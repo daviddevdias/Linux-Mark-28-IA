@@ -185,9 +185,6 @@ def gerenciador_arquivos(argumentos: dict) -> str:
         return f"Erro FS: {e}"
 
 
-def gerenciador_memoria(argumentos: dict) -> str:
-    resultado = update_memory({argumentos.get("category"): {argumentos.get("key"): argumentos.get("value")}})
-    return "Dados gravados." if isinstance(resultado, dict) else "Falha na memÃ³ria."
 
 
 def gerenciador_plano(argumentos: dict) -> str:
@@ -222,10 +219,6 @@ def gerenciador_codigo(argumentos: dict) -> str:
     return cod or "Falha gerando cÃ³digo."
 
 
-def gerenciador_visao(argumentos: dict) -> str:
-    from vision.capture import analisar_tela
-    executar_no_loop_atual(analisar_tela(argumentos.get("question", "Descreva o ecrÃ£.")))
-    return "AnÃ¡lise ativada."
 
 
 def gerenciador_troca_ia(argumentos: dict) -> str:
@@ -238,32 +231,12 @@ def gerenciador_agente_visual(argumentos: dict) -> str:
     return "Agente S necessita adaptaÃ§Ã£o modular no Linux."
 
 
-def gerenciador_visao_3d(argumentos: dict) -> str:
-    try:
-        from vision.capture import MotorVisaoEspacial
-        import cv2
-        motor, cap = MotorVisaoEspacial(), cv2.VideoCapture(0)
-        ret, frame = cap.read()
-        cap.release()
-        if not ret:
-            return "CÃ¢mera inacessÃ­vel."
-        res = motor.analisar_medida_cena(frame)
-        return f"Mapeamento OK. Escala: {res['pixels_por_cm']} px/cm." if res["status"] == "sucesso" else f"Erro 3D: {res['motivo']}"
-    except Exception as e:
-        return f"Falha 3D: {e}"
 
 
 def gerenciador_traducao_audio(argumentos: dict) -> str:
     return f"Escutando para traduzir ({argumentos.get('segundos', 10)}s)."
 
 
-def gerenciador_otimizacao_dados(argumentos: dict) -> str:
-    try:
-        from storage.optimizer import comprimir_banco_auditoria
-        executar_no_loop_atual(comprimir_banco_auditoria())
-        return "Banco otimizado."
-    except Exception as e:
-        return f"Falha DB: {e}"
 
 
 EXECUTOR_FERRAMENTAS: dict[str, Callable] = {
@@ -278,15 +251,11 @@ EXECUTOR_FERRAMENTAS: dict[str, Callable] = {
     "set_reminder": gerenciador_alarme,
     "smart_home": gerenciador_casa_inteligente,
     "file_controller": gerenciador_arquivos,
-    "save_memory": gerenciador_memoria,
     "agent_task": gerenciador_plano,
     "code_helper": gerenciador_codigo,
-    "screen_analysis": gerenciador_visao,
     "switch_ia_mode": gerenciador_troca_ia,
     "visual_gui_actuator": gerenciador_agente_visual,
-    "medir_ambiente_3d": gerenciador_visao_3d,
     "traduzir_audio_ambiente": gerenciador_traducao_audio,
-    "otimizar_banco_dados": gerenciador_otimizacao_dados,
 }
 
 
