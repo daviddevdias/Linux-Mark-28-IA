@@ -1,5 +1,5 @@
 from __future__ import annotations
-import asyncio, base64, json, logging, os, re, time
+import asyncio, base64, json, logging, re, time
 from collections import deque
 from datetime import datetime
 from typing import Any, Awaitable, Callable, Optional
@@ -23,10 +23,16 @@ modelo, disponivel, ultimo_check = "", False, 0.0
 shutdown_event: asyncio.Event | None = None
 
 PREFIXOS_SPOTIFY = [
-    "buscar no spotify", "tocar no spotify", "spotify",
-    "tocar musica", "toca", "buscar", "musica",
+    "buscar no spotify",
+    "tocar no spotify",
+    "spotify",
+    "tocar musica",
+    "toca",
+    "buscar",
+    "musica",
 ]
 PREFIXOS_YOUTUBE = ["pesquisar no youtube", "buscar no youtube", "youtube"]
+PREFIXOS_WEB = ["pesquisar na web", "pesquisar no google", "pesquisar", "busca"]
 
 Handler = Callable[[str], Awaitable[Optional[str]]]
 ROUTES: list[tuple[tuple[str, ...], Handler]] = []
@@ -42,9 +48,18 @@ def system_msg(ctx: str, estado: str = "") -> str:
 def normalizar(texto: str) -> str:
     t = re.sub(r"\s+", " ", texto.lower().strip())
     for src, dst in {
-        "ã": "a", "â": "a", "á": "a", "à": "a",
-        "ê": "e", "é": "e", "í": "i",
-        "ó": "o", "ô": "o", "õ": "o", "ú": "u", "ç": "c",
+        "ã": "a",
+        "â": "a",
+        "á": "a",
+        "à": "a",
+        "ê": "e",
+        "é": "e",
+        "í": "i",
+        "ó": "o",
+        "ô": "o",
+        "õ": "o",
+        "ú": "u",
+        "ç": "c",
     }.items():
         t = t.replace(src, dst)
     return t
@@ -59,7 +74,7 @@ def extrair_termo(cmd: str, prefixos: list) -> str:
     texto = cmd.strip()
     for p in sorted(prefixos, key=len, reverse=True):
         if texto.startswith(p):
-            texto = texto[len(p):].strip()
+            texto = texto[len(p) :].strip()
             break
     return re.sub(r"^(a musica|o|a|as|os|um|uma)\s+", "", texto).strip()
 
@@ -102,10 +117,9 @@ class Historico:
         self.turns.append({"role": role, "content": content})
 
     def add_tool(self, call_id: str, name: str, result: str):
-        self.turns.append({
-            "role": "tool", "tool_call_id": call_id,
-            "name": name, "content": result
-        })
+        self.turns.append(
+            {"role": "tool", "tool_call_id": call_id, "name": name, "content": result}
+        )
 
     def msgs(self) -> list[dict]:
         return list(self.turns)
@@ -143,6 +157,10 @@ class IARRouter:
     @property
     def status(self) -> dict:
         return {"modelo": modelo, "servidor": disponivel, "provedor": self.provedor}
+
+    @property
+    def modo_atual(self) -> str:
+        return self.provedor
 
     def definir_modo(self, modo: str) -> str:
         if modo == "gemini":
@@ -206,9 +224,12 @@ class IARRouter:
                         url, headers=hdrs, json=payload, timeout=TIMEOUT
                     ) as r:
                         if r.status == 200:
-                            return (await r.json()).get("choices", [{}])[0].get("message")
+                            return (
+                                (await r.json()).get("choices", [{}])[0].get("message")
+                            )
             except:
                 return None
+            return None
 
         if not modelo:
             return None
@@ -231,6 +252,7 @@ class IARRouter:
     async def dispatch(self, name: str, args: dict) -> str:
         try:
             from engine.tools_mapper import despachar
+
             return str(await despachar(name, args))
         except Exception as e:
             return f"Erro '{name}': {e}"
@@ -274,12 +296,14 @@ class IARRouter:
                 nome_fn = fn.get("name", "")
                 self.registrar_acao(nome_fn)
                 result = await self.dispatch(nome_fn, args)
-                msgs.append({
-                    "role": "tool",
-                    "tool_call_id": call_id,
-                    "name": nome_fn,
-                    "content": result,
-                })
+                msgs.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": call_id,
+                        "name": nome_fn,
+                        "content": result,
+                    }
+                )
                 self.historico.add_tool(call_id, nome_fn, result)
 
         return "Protocolo concluído."
@@ -288,20 +312,9 @@ class IARRouter:
 router = IARRouter()
 
 
-async def processar_comando(cmd: str) -> str:
-    try:
-        cmd_norm = normalizar(cmd)
-        resultado = await processar_diretriz(cmd_norm)
-        if resultado:
-            return resultado
-        return await router.responder(cmd, memoria="")
-    except Exception as e:
-        log.exception(f"Erro ao processar comando: {cmd}")
-        return f"Erro: {str(e)}"
-
-
 async def abrir_web_direto(cmd: str) -> str:
     from engine.tools_mapper import gerenciador_browser
+
     c = cmd.lower()
     if "youtube" in c:
         return gerenciador_browser({"action": "open", "url": "https://www.youtube.com"})
@@ -312,48 +325,56 @@ async def abrir_web_direto(cmd: str) -> str:
 
 async def youtube_busca(cmd: str) -> str:
     from engine.tools_mapper import gerenciador_youtube
+
     termo = extrair_termo(cmd, PREFIXOS_YOUTUBE)
     return gerenciador_youtube({"query": termo} if termo else {})
 
 
 async def silencio(cmd: str) -> str:
     from tasks.computer_control import mutar_volume
+
     mutar_volume()
     return "Áudio silenciado."
 
 
 async def bloquear(cmd: str) -> str:
     from tasks.computer_control import bloquear_tela
+
     bloquear_tela()
     return "Tela bloqueada."
 
 
 async def minimizar(cmd: str) -> str:
     from tasks.computer_control import minimizar_janelas
+
     minimizar_janelas()
     return "Minimizado."
 
 
 async def fechar(cmd: str) -> str:
     from tasks.computer_control import fechar_janela_ativa
+
     fechar_janela_ativa()
     return "Encerrado."
 
 
 async def screenshot(cmd: str) -> str:
     from tasks.computer_control import print_tela
+
     print_tela()
     return "Captura realizada."
 
 
 async def limpar_lixo(cmd: str) -> str:
     from tasks.computer_control import limpar_lixeira
+
     limpar_lixeira()
     return "Lixeira limpa."
 
 
 async def trabalho(cmd: str) -> str:
     from tasks.open_app import open_app
+
     open_app({"app_name": "vscode"})
     open_app({"app_name": "chrome"})
     return "Ambiente dev iniciado."
@@ -363,6 +384,7 @@ async def modo_sono(cmd: str) -> str:
     from tasks.computer_control import bloquear_tela, mutar_volume
     from tasks.smart_home import desligar_tv
     from tasks.spotify_manager import spotify_stark
+
     spotify_stark.controlar_reproducao("pause")
     desligar_tv()
     mutar_volume()
@@ -372,6 +394,7 @@ async def modo_sono(cmd: str) -> str:
 
 async def tv_ligar(cmd: str) -> str:
     from tasks.smart_home import energia_tv, buscar_id_tv, diagnosticar_falha_tv
+
     if energia_tv(True):
         return "TV ligada."
     return "TV não respondeu." if buscar_id_tv() else diagnosticar_falha_tv()
@@ -379,6 +402,7 @@ async def tv_ligar(cmd: str) -> str:
 
 async def tv_desligar(cmd: str) -> str:
     from tasks.smart_home import desligar_tv, buscar_id_tv, diagnosticar_falha_tv
+
     if desligar_tv():
         return "TV desligada."
     return "Falha ao desligar TV." if buscar_id_tv() else diagnosticar_falha_tv()
@@ -386,6 +410,7 @@ async def tv_desligar(cmd: str) -> str:
 
 async def tv_volume(cmd: str) -> str:
     from tasks.smart_home import enviar_comando_tv
+
     nivel = extrair_numero(cmd)
     if nivel is None:
         return "Indique o volume."
@@ -396,67 +421,58 @@ async def tv_volume(cmd: str) -> str:
 
 async def tv_youtube(cmd: str) -> str:
     from tasks.smart_home import abrir_youtube_tv
+
     return abrir_youtube_tv()
 
 
 async def musica(cmd: str) -> str:
     from tasks.spotify_manager import spotify_stark
+
     t = extrair_termo(re.sub(r"\bspotify\b", "", cmd).strip(), PREFIXOS_SPOTIFY)
     return spotify_stark.abrir_e_buscar(t) if t else "Qual música?"
 
 
 async def playlist(cmd: str) -> str:
     from tasks.spotify_manager import spotify_stark
-    return spotify_stark.listar_e_tocar_playlist(re.sub(r"\bplaylist\b", "", cmd).strip())
+
+    return spotify_stark.listar_e_tocar_playlist(
+        re.sub(r"\bplaylist\b", "", cmd).strip()
+    )
 
 
 async def favoritas(cmd: str) -> str:
     from tasks.spotify_manager import spotify_stark
+
     return spotify_stark.tocar_minhas_favoritas()
 
 
 async def pausar(cmd: str) -> str:
     from tasks.spotify_manager import spotify_stark
+
     return spotify_stark.controlar_reproducao("pause")
 
 
 async def continuar(cmd: str) -> str:
     from tasks.spotify_manager import spotify_stark
+
     return spotify_stark.controlar_reproducao("play")
 
 
 async def proxima(cmd: str) -> str:
     from tasks.spotify_manager import spotify_stark
+
     return spotify_stark.controlar_reproducao("proxima")
 
 
 async def anterior(cmd: str) -> str:
     from tasks.spotify_manager import spotify_stark
+
     return spotify_stark.controlar_reproducao("anterior")
-
-
-async def monitorar(cmd: str) -> str:
-    return "Monitoramento ativado."
-
-
-async def parar_monitor_cmd(cmd: str) -> str:
-    return "Monitoramento cessado."
-
-
-async def status_monitor_cmd(cmd: str) -> str:
-    return "Status reportado."
-
-
-async def olha_tela(cmd: str) -> str:
-    return "Análise de tela concluída."
-
-
-async def olha_camera(cmd: str) -> str:
-    return "Análise de câmera concluída."
 
 
 async def alarme(cmd: str) -> str:
     from tasks.alarm import parse_alarme_voz, adicionar_alarme
+
     data_iso, hora, missao, _ = parse_alarme_voz(cmd)
     if not hora:
         m1 = re.search(r"(\d{1,2})[:h](\d{2})", cmd.replace(" e ", ":"))
@@ -473,63 +489,56 @@ async def alarme(cmd: str) -> str:
 async def parar_alarme(cmd: str) -> str:
     from tasks.spotify_manager import spotify_stark
     from tasks.alarm import parar_alarme_total
+
     spotify_stark.controlar_reproducao("pause")
     return parar_alarme_total()
 
 
-ROUTES.extend([
-    (("dormir",), modo_sono),
-    (("sono",), modo_sono),
-    (("deitar",), modo_sono),
-    (("boa", "noite"), modo_sono),
-    (("abrir", "youtube"), abrir_web_direto),
-    (("pesquisar", "youtube"), youtube_busca),
-    (("pesquisar", "google"), abrir_web_direto),
-    (("silencio",), silencio),
-    (("mutar",), silencio),
-    (("bloquear",), bloquear),
-    (("lock",), bloquear),
-    (("minimizar",), minimizar),
-    (("fechar",), fechar),
-    (("screenshot",), screenshot),
-    (("captura",), screenshot),
-    (("limpar", "lixeira"), limpar_lixo),
-    (("limpar",), limpar_lixo),
-    (("trabalho",), trabalho),
-    (("ligar", "tv"), tv_ligar),
-    (("liga", "tv"), tv_ligar),
-    (("desligar", "tv"), tv_desligar),
-    (("desliga", "tv"), tv_desligar),
-    (("youtube", "tv"), tv_youtube),
-    (("youtube", "televisao"), tv_youtube),
-    (("volume",), tv_volume),
-    (("spotify",), musica),
-    (("tocar", "musica"), musica),
-    (("musica",), musica),
-    (("playlist",), playlist),
-    (("favoritas",), favoritas),
-    (("pausar",), pausar),
-    (("continuar",), continuar),
-    (("proxima",), proxima),
-    (("anterior",), anterior),
-    (("monitorar", "tela"), monitorar),
-    (("monitorar",), monitorar),
-    (("desligar", "monitor"), parar_monitor_cmd),
-    (("desativar", "monitor"), parar_monitor_cmd),
-    (("monitor", "status"), status_monitor_cmd),
-    (("olha", "tela"), olha_tela),
-    (("analisa", "tela"), olha_tela),
-    (("olha", "camera"), olha_camera),
-    (("camera",), olha_camera),
-    (("ver", "camera"), olha_camera),
-    (("agendar", "alarme"), alarme),
-    (("criar", "alarme"), alarme),
-    (("despertar",), alarme),
-    (("parar", "alarme"), parar_alarme),
-    (("parar", "musica"), parar_alarme),
-    (("desligar", "alarme"), parar_alarme),
-    (("acordei",), parar_alarme),
-])
+ROUTES.extend(
+    [
+        (("dormir",), modo_sono),
+        (("sono",), modo_sono),
+        (("deitar",), modo_sono),
+        (("boa", "noite"), modo_sono),
+        (("abrir", "youtube"), abrir_web_direto),
+        (("pesquisar", "youtube"), youtube_busca),
+        (("pesquisar", "google"), abrir_web_direto),
+        (("silencio",), silencio),
+        (("mutar",), silencio),
+        (("bloquear",), bloquear),
+        (("lock",), bloquear),
+        (("minimizar",), minimizar),
+        (("fechar",), fechar),
+        (("screenshot",), screenshot),
+        (("captura",), screenshot),
+        (("limpar", "lixeira"), limpar_lixo),
+        (("limpar",), limpar_lixo),
+        (("trabalho",), trabalho),
+        (("ligar", "tv"), tv_ligar),
+        (("liga", "tv"), tv_ligar),
+        (("desligar", "tv"), tv_desligar),
+        (("desliga", "tv"), tv_desligar),
+        (("youtube", "tv"), tv_youtube),
+        (("youtube", "televisao"), tv_youtube),
+        (("volume",), tv_volume),
+        (("spotify",), musica),
+        (("tocar", "musica"), musica),
+        (("musica",), musica),
+        (("playlist",), playlist),
+        (("favoritas",), favoritas),
+        (("pausar",), pausar),
+        (("continuar",), continuar),
+        (("proxima",), proxima),
+        (("anterior",), anterior),
+        (("agendar", "alarme"), alarme),
+        (("criar", "alarme"), alarme),
+        (("despertar",), alarme),
+        (("parar", "alarme"), parar_alarme),
+        (("parar", "musica"), parar_alarme),
+        (("desligar", "alarme"), parar_alarme),
+        (("acordei",), parar_alarme),
+    ]
+)
 
 PREFIXO_MAP = {
     kw[:n]: kw
