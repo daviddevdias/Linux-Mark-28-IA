@@ -8,6 +8,7 @@ import psutil
 from PyQt6.QtCore import QObject, QTimer, QUrl, Qt, pyqtSignal, pyqtSlot
 from PyQt6.QtWebChannel import QWebChannel
 from PyQt6.QtWebEngineWidgets import QWebEngineView
+from PyQt6.QtWebEngineCore import QWebEngineProfile
 from PyQt6.QtWidgets import QApplication, QMainWindow
 
 main_async_loop = None
@@ -270,21 +271,29 @@ class JarvisBridge(QObject):
         except Exception as e:
             return json.dumps({"erro": str(e)})
 
-    @pyqtSlot(str)
-    def salvar_configuracao(self, chave: str, valor: str):
+    @pyqtSlot(str, str, result=str)
+    def salvar_configuracao(self, chave: str, valor: str) -> str:
+        print(f"[PAINEL] salvar_configuracao chamado: chave={chave!r} valor={valor!r}")
         try:
             config.definir_valor_ui(chave, valor)
             arquivo = resolver_arquivo(chave)
-            from pathlib import Path
 
+            config.API_DIR.mkdir(parents=True, exist_ok=True)
             caminho = config.API_DIR / arquivo
             dados = config.ler_json(caminho) if caminho.exists() else {}
+            if not isinstance(dados, dict):
+                dados = {}
             dados[chave] = valor
             caminho.write_text(
                 json.dumps(dados, indent=2, ensure_ascii=False), encoding="utf-8"
             )
+            print(f"[PAINEL] OK: {chave} gravado em {caminho}")
+            self.adicionar_log("sistema", f"Config salva: {chave} → {arquivo}")
+            return json.dumps({"ok": True, "chave": chave, "arquivo": arquivo})
         except Exception as e:
-            print(f"Erro ao salvar {chave}: {e}")
+            print(f"[PAINEL] ERRO ao salvar {chave}: {e}")
+            self.adicionar_log("erro", f"Falha ao salvar {chave}: {e}")
+            return json.dumps({"ok": False, "chave": chave, "erro": str(e)})
 
     @pyqtSlot(result=str)
     def obter_alarmes(self) -> str:
@@ -437,11 +446,21 @@ class PainelCore(QMainWindow):
         settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessFileUrls, True)
         settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
 
-        channel = QWebChannel()
-        channel.registerObject("bridge", self.bridge)
-        self.web.page().setWebChannel(channel)
+        # IMPORTANTE: o QWebChannel precisa ser guardado como atributo da instância
+        # (self.channel), senão o garbage collector do Python o destrói assim que
+        # __init__ termina — isso derruba a ponte JS<->Python de forma intermitente
+        # (era a causa do banner "BACKEND PYTHON NÃO CONECTADO" e dos erros
+        # "jarvis.salvar_configuracao indisponível" no console).
+        self.channel = QWebChannel(self)
+        self.channel.registerObject("bridge", self.bridge)
+        self.web.page().setWebChannel(self.channel)
 
         web_path = QUrl.fromLocalFile(str(config.BASE_DIR / "web" / "index.html"))
+        print(f"[PAINEL] BASE_DIR = {config.BASE_DIR}")
+        print(f"[PAINEL] API_DIR  = {config.API_DIR}  (existe: {config.API_DIR.exists()})")
+        print(f"[PAINEL] index.html carregado de: {config.BASE_DIR / 'web' / 'index.html'}  (existe: {(config.BASE_DIR / 'web' / 'index.html').exists()})")
+        # Evita que o QtWebEngine sirva uma versão antiga em cache do index.html/app.js
+        self.web.page().profile().setHttpCacheType(QWebEngineProfile.HttpCacheType.NoCache)
         self.web.setUrl(web_path)
 
         QTimer.singleShot(1500, lambda: self.web.page().runJavaScript(

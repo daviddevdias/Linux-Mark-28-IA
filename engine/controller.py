@@ -155,6 +155,31 @@ async def check(force: bool = False):
     await detectar_modelo()
 
 
+def extrair_tool_calls_textuais(texto: str) -> list[dict] | None:
+    t = (texto or "").strip()
+    if not t or t[0] not in "[{":
+        return None
+    try:
+        dados = json.loads(t)
+    except Exception:
+        return None
+    if isinstance(dados, dict):
+        dados = [dados]
+    if not isinstance(dados, list):
+        return None
+    chamadas = []
+    for item in dados:
+        if isinstance(item, dict) and item.get("name"):
+            args = item.get("arguments", item.get("parameters", {}))
+            if isinstance(args, str):
+                try:
+                    args = json.loads(args)
+                except Exception:
+                    args = {}
+            chamadas.append({"name": item["name"], "arguments": args or {}})
+    return chamadas or None
+
+
 class Historico:
     def __init__(self):
         self.turns = deque(maxlen=MAX_HIST)
@@ -320,7 +345,7 @@ class IARRouter:
             if not disponivel:
                 await check(force=True)
             if not disponivel:
-                return "Servidor local offline."
+                return 
             if not modelo:
                 return "Nenhum modelo carregado."
 
@@ -338,6 +363,20 @@ class IARRouter:
             tool_calls = msg.get("tool_calls") or []
             if not tool_calls:
                 reply = (msg.get("content") or "").replace("*", "").strip()
+
+                pseudo = extrair_tool_calls_textuais(reply)
+                if pseudo:
+                    resultados = []
+                    for call in pseudo:
+                        nome_fn = call["name"]
+                        args = call["arguments"]
+                        self.registrar_acao(nome_fn)
+                        resultado = await self.dispatch(nome_fn, args)
+                        resultados.append(resultado)
+                    reply = " ".join(r for r in resultados if r) or "Comando processado."
+                    self.historico.add("assistant", reply)
+                    return reply
+
                 if not reply or (reply.startswith("{") and reply.endswith("}")):
                     reply = "Comando processado."
                 self.historico.add("assistant", reply)

@@ -1,215 +1,185 @@
 from __future__ import annotations
-
 import os
-import shutil
-import subprocess
-import webbrowser
-from pathlib import Path
-
-import psutil
-
-
-SYSTEM_ROOT = Path(os.environ.get("SystemRoot", r"C:\Windows"))
-PROGRAM_FILES = [Path(p) for p in (os.environ.get("ProgramFiles"), os.environ.get("ProgramFiles(x86)")) if p]
-LOCAL_APP_DATA = Path(os.environ.get("LOCALAPPDATA", ""))
-USER_PROFILE = Path(os.path.expanduser("~"))
+import sys
+import asyncio
+import logging
+import threading
+import time
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QApplication
 
 
-APP_ALIASES: dict[str, str] = {
-    "whatsapp": "whatsapp:",
-    "chrome": "chrome.exe",
-    "google": "chrome.exe",
-    "firefox": "firefox.exe",
-    "spotify": "spotify:",
-    "vscode": "code",
-    "visual studio code": "code",
-    "discord": "discord.exe",
-    "telegram": "telegram.exe",
-    "instagram": "https://instagram.com",
-    "tiktok": "https://tiktok.com",
-    "notepad": "notepad.exe",
-    "bloco de notas": "notepad.exe",
-    "calculator": "calc.exe",
-    "calculadora": "calc.exe",
-    "cmd": "cmd.exe",
-    "terminal": "wt.exe",
-    "powershell": "powershell.exe",
-    "explorer": "explorer.exe",
-    "arquivos": "explorer.exe",
-    "paint": "mspaint.exe",
-    "word": "winword.exe",
-    "excel": "excel.exe",
-    "powerpoint": "powerpnt.exe",
-    "vlc": "vlc.exe",
-    "zoom": "zoom.exe",
-    "slack": "slack.exe",
-    "steam": "steam.exe",
-    "task manager": "taskmgr.exe",
-    "gerenciador de tarefas": "taskmgr.exe",
-    "settings": "ms-settings:",
-    "configuracoes": "ms-settings:",
-    "configurações": "ms-settings:",
-    "edge": "msedge.exe",
-    "brave": "brave.exe",
-    "postman": "postman.exe",
-    "figma": "https://figma.com",
-}
+
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger("jarvis")
+
+import config
+from painel import PainelCore, set_loop
+from audio.voz import (
+    ouvir_comando,
+    falar,
+    interromper_voz,
+    iniciar_wake_listener,
+    barge_cmd,
+)
+from engine.core import processar_comando, inicializar_ia
+from engine.controller import get_shutdown_event, preaquecer_modelo
+from tasks.monitor import iniciar_sentinela, registrar_loop_monitor_voz, registrar_falar
+from tasks.alarm import gerenciador_alarmes
+from tasks.wake import processar_wake, resposta_ativacao_aleatoria
+from tasks.pomodoro import registrar_falar_cb
+from app_ul.interface import JarvisUI
+from integrations.telegram_bridge_auth_patch import iniciar_telegram
+
+from brain.watchdog import watchdog, registrar_modulos_padrao
+from engine.ConnectionManager import lm_manager
 
 
-COMMON_APP_PATHS = {
-    "chrome.exe": [
-        r"Google\Chrome\Application\chrome.exe",
-    ],
-    "msedge.exe": [
-        r"Microsoft\Edge\Application\msedge.exe",
-    ],
-    "brave.exe": [
-        r"BraveSoftware\Brave-Browser\Application\brave.exe",
-    ],
-    "firefox.exe": [
-        r"Mozilla Firefox\firefox.exe",
-    ],
-    "code": [
-        r"Microsoft VS Code\Code.exe",
-        r"Programs\Microsoft VS Code\Code.exe",
-    ],
-    "discord.exe": [
-        r"Discord\Update.exe",
-    ],
-    "telegram.exe": [
-        r"Telegram Desktop\Telegram.exe",
-        r"Programs\Telegram Desktop\Telegram.exe",
-    ],
-    "spotify.exe": [
-        r"Spotify\Spotify.exe",
-    ],
-    "zoom.exe": [
-        r"Zoom\bin\Zoom.exe",
-    ],
-    "slack.exe": [
-        r"slack\slack.exe",
-    ],
-    "postman.exe": [
-        r"Postman\Postman.exe",
-    ],
-}
+QApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
+app = QApplication(sys.argv)
+app.setQuitOnLastWindowClosed(False)
+
+SLEEP_TIMEOUT = 30
 
 
-def _normalizar_nome(nome: str) -> str:
-    return nome.lower().strip().replace(".exe", "")
-
-
-def verificar_processo(app: str) -> bool:
-    alvo = _normalizar_nome(Path(app).name)
-    if not alvo:
-        return False
-    for proc in psutil.process_iter(["name", "exe"]):
-        try:
-            nome = _normalizar_nome(proc.info.get("name") or "")
-            exe = _normalizar_nome(Path(proc.info.get("exe") or "").name)
-            if alvo in {nome, exe} or alvo in nome or alvo in exe:
-                return True
-        except (psutil.Error, OSError, ValueError):
-            continue
-    return False
-
-
-def padronizar(raw: str) -> str:
-    chave = raw.lower().strip()
-    if chave in APP_ALIASES:
-        return APP_ALIASES[chave]
-    for alias, comando in APP_ALIASES.items():
-        if alias in chave or chave in alias:
-            return comando
-    return raw.strip()
-
-
-def _candidatos_caminho(comando: str) -> list[Path]:
-    candidatos: list[Path] = []
-    nome = Path(comando).name
-
-    if not nome:
-        return candidatos
-
-    for base in PROGRAM_FILES:
-        for rel in COMMON_APP_PATHS.get(nome.lower(), []):
-            candidatos.append(base / rel)
-
-    if LOCAL_APP_DATA:
-        for rel in COMMON_APP_PATHS.get(nome.lower(), []):
-            candidatos.append(LOCAL_APP_DATA / rel)
-
-    candidatos.extend(
-        [
-            SYSTEM_ROOT / "System32" / nome,
-            SYSTEM_ROOT / nome,
-            USER_PROFILE / "AppData" / "Local" / "Microsoft" / "WindowsApps" / nome,
-        ]
-    )
-    return candidatos
-
-
-def _abrir_url_ou_uri(comando: str) -> bool:
-    if comando.startswith(("http://", "https://")):
-        webbrowser.open(comando)
-        return True
-    if ":" in comando and " " not in comando and not Path(comando).drive:
-        os.startfile(comando)  [attr-defined]
-        return True
-    return False
-
-
-def disparar(app: str) -> bool:
-    comando = app.strip()
-    if not comando:
-        return False
-
+async def executar(cmd: str):
     try:
-        if _abrir_url_ou_uri(comando):
-            return True
-    except OSError:
+        await processar_comando(cmd)
+    except asyncio.CancelledError:
         pass
+    except Exception as e:
+        log.error(f"Erro ao processar: {e}")
 
-    partes = comando.split()
-    exe = partes[0]
-    args = partes[1:]
 
-    localizado = shutil.which(exe)
-    if localizado:
-        subprocess.Popen([localizado, *args], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        return True
+async def loop_principal(ui):
+    await inicializar_ia()
+    iniciar_sentinela()
+    registrar_loop_monitor_voz(asyncio.get_running_loop())
 
-    caminho = Path(exe).expanduser()
-    if caminho.exists():
-        subprocess.Popen([str(caminho), *args], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        return True
+    asyncio.create_task(preaquecer_modelo())
 
-    for candidato in _candidatos_caminho(exe):
-        if candidato.exists():
-            cmd = [str(candidato), *args]
-            if candidato.name.lower() == "update.exe" and "discord" in str(candidato).lower():
-                cmd.extend(["--processStart", "Discord.exe"])
-            subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            return True
+    registrar_modulos_padrao()
+    watchdog.iniciar()
+    log.info("Watchdog iniciado")
+
+    lm_manager.iniciar_monitoramento(asyncio.get_running_loop())
+    log.info("LM Studio")
+
+    iniciar_wake_listener()
+    registrar_falar(
+        lambda t: asyncio.run_coroutine_threadsafe(falar(t), loop_engine)
+    )
+    registrar_falar_cb(
+        lambda t: asyncio.run_coroutine_threadsafe(falar(t), loop_engine)
+    )
+
+    threading.Thread(target=iniciar_telegram, daemon=True, name="telegram").start()
+
+    shutdown = get_shutdown_event()
+    modo_continuo = False
+    ultimo_comando = 0.0
+    task_atual: asyncio.Task | None = None
+
+    while not shutdown.is_set():
+        try:
+            config.recarregar_identidade_painel()
+
+            audio, task_atual = await aguardar_task_ou_barge(task_atual)
+            if audio is not None:
+                if task_atual is not None:
+                    interromper_voz()
+                    task_atual.cancel()
+                    task_atual = None
+            else:
+                audio = await ouvir_comando()
+
+            if not audio or not isinstance(audio, str):
+                if (
+                    modo_continuo
+                    and ultimo_comando > 0
+                    and (time.time() - ultimo_comando) > SLEEP_TIMEOUT
+                ):
+                    modo_continuo = False
+                    ultimo_comando = 0.0
+                continue
+
+            ultimo_comando = time.time()
+
+            if modo_continuo:
+                ativo, cmd = processar_wake(audio)
+                if ativo:
+                    if cmd:
+                        task_atual = asyncio.create_task(executar(cmd.strip()))
+                    continue
+                task_atual = asyncio.create_task(executar(audio.strip()))
+                continue
+
+            ativo, cmd = processar_wake(audio)
+            if not ativo:
+                continue
+
+            modo_continuo = True
+            if not cmd:
+                task_atual = asyncio.create_task(falar(resposta_ativacao_aleatoria()))
+                continue
+
+            task_atual = asyncio.create_task(executar(cmd.strip()))
+        except Exception as e:
+            log.exception("Erro no loop principal")
+            await asyncio.sleep(0.3)
+
+
+
+async def aguardar_task_ou_barge(task: asyncio.Task | None):
+    
+    if task is None or task.done():
+        return None, None
+    while not task.done():
+        done, _ = await asyncio.wait([task], timeout=0.15)
+        if done:
+            return None, None
+        try:
+            audio = barge_cmd.get_nowait()
+            if audio:
+                return audio, task
+        except:
+            pass
+    return None, None
+
+
+loop_engine = None
+
+
+def rodar_engine(ui):
+    global loop_engine
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop_engine = loop
+    set_loop(loop)
 
     try:
-        os.startfile(comando)  [attr-defined]
-        return True
-    except OSError:
-        return False
+        gerenciador_alarmes.registrar_callbacks(falar, loop)
+    except Exception as e:
+        log.warning(f"Aviso ao registrar alarmes: {e}")
+
+    try:
+        loop.run_until_complete(loop_principal(ui))
+    finally:
+        loop.close()
 
 
-def open_app(params=None, **kwargs):
-    app = (params or {}).get("app_name", "").strip()
-    if not app:
-        return "Qual aplicativo?"
+def main():
+    painel = PainelCore()
+    ui = JarvisUI(painel=painel)
+    ui.show()
 
-    norm = padronizar(app)
-    processo = Path(norm).name or app
-    if processo and processo.endswith(".exe") and verificar_processo(processo):
-        return f"{app} já está ativo."
+    thread_engine = threading.Thread(
+        target=rodar_engine, args=(ui,), daemon=True, name="engine"
+    )
+    thread_engine.start()
 
-    sucesso = disparar(norm)
-    if not sucesso and norm != app:
-        sucesso = disparar(app)
-    return f"{app} iniciado." if sucesso else "Atalho não localizado no Windows."
+    sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    main()

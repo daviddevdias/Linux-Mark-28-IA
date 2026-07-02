@@ -1,5 +1,4 @@
 import json
-import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -8,6 +7,53 @@ ASSETS_DIR = BASE_DIR / "assets"
 
 API_DIR.mkdir(parents=True, exist_ok=True)
 ASSETS_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _autoteste_escrita_api_dir():
+    """
+    Roda uma vez, ao importar config.py, e prova (ou desmente) que o
+    processo Python tem permissao pra criar/escrever arquivos dentro de
+    API_DIR. Isso isola problemas de permissao/antivirus/OneDrive do
+    problema de conexao do QWebChannel entre app.js e painel.py.
+    """
+    import sys
+    from datetime import datetime
+
+    teste_path = API_DIR / "_autoteste_config.json"
+    try:
+        teste_path.write_text(
+            json.dumps(
+                {"ok": True, "quando": datetime.now().isoformat(timespec="seconds")},
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        print(f"[CONFIG] Autoteste de escrita OK em: {teste_path}")
+    except Exception as e:
+        msg = (
+            f"[CONFIG] FALHA AO ESCREVER EM {API_DIR}\n"
+            f"[CONFIG] Erro: {e}\n"
+            f"[CONFIG] O painel NAO vai conseguir salvar nada ate isso ser corrigido.\n"
+            f"[CONFIG] Verifique permissao da pasta, antivirus, ou se ela esta "
+            f"dentro de um OneDrive/pasta protegida do Windows."
+        )
+        print(msg)
+        if sys.platform == "win32":
+            try:
+                import ctypes
+                ctypes.windll.user32.MessageBoxW(
+                    0,
+                    f"O Jarvis NAO consegue escrever arquivos em:\n{API_DIR}\n\n"
+                    f"Erro: {e}\n\n"
+                    f"Configuracoes do painel NAO serao salvas ate isso ser resolvido.",
+                    "Jarvis - Falha de permissao",
+                    0x30,  # MB_ICONWARNING
+                )
+            except Exception:
+                pass
+
+
+_autoteste_escrita_api_dir()
 
 
 def ler_json(caminho: Path) -> dict:
@@ -36,7 +82,7 @@ def salvar_json(nome_arquivo: str, dados: dict) -> bool:
 
 
 def carregar_tudo() -> dict:
-    arquivos = ["config_smart.json", "api_keys.json", "config_core.json", "notas.json"]
+    arquivos = ["config_smart.json", "api_keys.json", "config_core.json"]
     dados = {}
     for nome in arquivos:
         dados.update(ler_json(API_DIR / nome))
@@ -57,10 +103,7 @@ def definir_valor_ui(chave: str, valor: str):
         "openweather_api_key": "OPENWEATHER_API_KEY",
         "telegram_token": "TELEGRAM_TOKEN",
         "telegram_auth_token": "TELEGRAM_AUTH_TOKEN",
-        "deepgram_api_key": "DEEPGRAM_API_KEY",
         "whisper_model": "WHISPER_MODEL",
-        "whisper_device": "WHISPER_DEVICE",
-        "whisper_compute": "WHISPER_COMPUTE",
         "cidade_padrao": "cidade_padrao",
         "email_imap_host": "EMAIL_IMAP_HOST",
         "email_user": "EMAIL_USER",
@@ -132,8 +175,8 @@ TELEGRAM_AUTH_TOKEN = cfg.get("telegram_auth_token", "")
 TELEGRAM_ALLOWED_IDS = cfg.get("telegram_allowed_ids", [])
 OPENWEATHER_API_KEY = cfg.get("openweather_api_key", "")
 WHISPER_MODEL = cfg.get("whisper_model", "small")
-WHISPER_DEVICE = cfg.get("whisper_device", "cpu")
-WHISPER_COMPUTE = cfg.get("whisper_compute", "int8")
+WHISPER_DEVICE = "cpu"  # travado em CPU, não editável pelo painel
+WHISPER_COMPUTE = "int8"  # travado, não editável pelo painel
 NOME_MESTRE = cfg.get("nome_mestre", "Chefe")
 voz_atual = cfg.get("voz_atual", cfg.get("voz", "pt-BR-AntonioNeural"))
 
@@ -143,12 +186,6 @@ DEVICE_INDEX = (
     if _idx_salvo is not None and str(_idx_salvo).strip() != ""
     else None
 )
-
-tema_ativo = cfg.get("tema_ativo", "MIDNIGHT_MINIMAL")
-notas = cfg.get("notas", "")
-cidade_padrao = cfg.get("cidade_padrao", "")
-voz_referencia = str(ASSETS_DIR / "voz_clone.wav")
-
 EMAIL_IMAP_HOST = cfg.get("email_imap_host", "")
 EMAIL_USER = cfg.get("email_user", "")
 EMAIL_PASS = cfg.get("email_pass", "")

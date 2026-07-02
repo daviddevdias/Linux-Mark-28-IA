@@ -368,6 +368,15 @@ def e_comando_parar_monitor(texto: str) -> bool:
     return match_substring(normalizar_frase(texto), MON_STOP_NORM)
 
 
+def saudacao_por_hora() -> str:
+    hora = datetime.now().hour
+    if 5 <= hora < 12:
+        return "Bom dia"
+    elif 12 <= hora < 18:
+        return "Boa tarde"
+    return "Boa noite"
+
+
 def resposta_ativacao_aleatoria() -> str:
     hora = datetime.now().hour
     if 5 <= hora < 12:
@@ -376,4 +385,6 @@ def resposta_ativacao_aleatoria() -> str:
         pool = _CFG.RESPONSES_AFTERNOON
     else:
         pool = _CFG.RESPONSES_EVENING
-    return random.choice((*pool, *_CFG.RESPONSES_GENERIC))
+    if random.random() < 0.4:
+        return random.choice(pool)
+    return random.choice(_CFG.RESPONSES_GENERIC)

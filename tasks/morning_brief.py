@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import logging
 import config
 from tasks.news import noticias_para_fala
+
+log = logging.getLogger("jarvis.morning_brief")
 
 async def gerar_briefing(ativo: bool | None = None) -> str:
     if ativo is None:
@@ -14,12 +17,12 @@ async def gerar_briefing(ativo: bool | None = None) -> str:
     clima = getattr(config, "cidade_padrao", "")
     if clima:
         try:
-            from tasks.monitor import status_clima
-            info = status_clima(clima)
+            from tasks.weather import obter_previsao_hoje
+            info = obter_previsao_hoje(clima)
             if info:
-                partes.append(f"Clima em {clima}: {info}.")
-        except:
-            pass
+                partes.append(info)
+        except Exception as e:
+            log.warning(f"Falha ao obter clima no briefing: {e}")
 
     news_ativo = getattr(config, "NEWS_ATIVO", True)
     if news_ativo:
@@ -27,8 +30,8 @@ async def gerar_briefing(ativo: bool | None = None) -> str:
             noticias = await noticias_para_fala(3)
             if noticias:
                 partes.append(noticias)
-        except:
-            pass
+        except Exception as e:
+            log.warning(f"Falha ao obter notícias no briefing: {e}")
 
     cal_ativo = getattr(config, "CALENDAR_ATIVO", False)
     if cal_ativo:
@@ -38,8 +41,8 @@ async def gerar_briefing(ativo: bool | None = None) -> str:
             ev = eventos_para_fala(date.today().isoformat())
             if ev:
                 partes.append(ev)
-        except:
-            pass
+        except Exception as e:
+            log.warning(f"Falha ao obter eventos no briefing: {e}")
 
     email_ativo = getattr(config, "EMAIL_ATIVO", False)
     if email_ativo:
@@ -48,7 +51,7 @@ async def gerar_briefing(ativo: bool | None = None) -> str:
             emails = await emails_para_fala(3)
             if emails:
                 partes.append(emails)
-        except:
-            pass
+        except Exception as e:
+            log.warning(f"Falha ao obter e-mails no briefing: {e}")
 
     return ". ".join(partes)

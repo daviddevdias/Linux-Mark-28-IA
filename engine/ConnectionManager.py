@@ -2,7 +2,7 @@ import aiohttp
 import logging
 import asyncio
 
-log = logging.getLogger("jarvis.lm_manager")
+log = logging.getLogger("config.Manager")
 
 
 class LMManager:
@@ -36,7 +36,7 @@ class LMManager:
             if self.is_online != estado_anterior:
                 if self.is_online:
                     log.info(
-                        f"LM Studio online — modelos: {', '.join(self.modelos_disponiveis[:3])}"
+                        f"LM Studio online"
                     )
                 else:
                     log.warning("LM Studio offline.")

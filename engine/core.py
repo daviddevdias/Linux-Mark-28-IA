@@ -76,9 +76,8 @@ class SystemOrchestrator:
         pass
 
     async def inicializar_servicos(self):
-        logging.info("Inicializando motores de IA...")
+        logging.info("Inicializando motores")
         await detectar_modelo()
-        logging.info("Serviços prontos.")
 
     def registrar_telemetria(
         self, tipo: str, comando: str, modulo: str, ts_inicio: float

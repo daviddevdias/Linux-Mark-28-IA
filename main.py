@@ -12,7 +12,8 @@ os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--no-sandbox --log-level=3"
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
 os.environ["QT_LOGGING_RULES"] = "qt.qpa.window=false"
 
-logging.basicConfig(level=logging.INFO)
+
+logging.disable(logging.CRITICAL)
 log = logging.getLogger("jarvis")
 
 import config
@@ -26,18 +27,13 @@ from audio.voz import (
 )
 from engine.core import processar_comando, inicializar_ia
 from engine.controller import get_shutdown_event, preaquecer_modelo
-from tasks.monitor import iniciar_sentinela, registrar_loop_monitor_voz
+from tasks.monitor import iniciar_sentinela, registrar_loop_monitor_voz, registrar_falar
 from tasks.alarm import gerenciador_alarmes
 from tasks.wake import processar_wake, resposta_ativacao_aleatoria
 from tasks.pomodoro import registrar_falar_cb
 from app_ul.interface import JarvisUI
 from integrations.telegram_bridge_auth_patch import iniciar_telegram
 
-from tasks.clap_detector import (
-    iniciar_detector,
-    registrar_callback_palma,
-    parar_detector,
-)
 from brain.watchdog import watchdog, registrar_modulos_padrao
 from engine.ConnectionManager import lm_manager
 
@@ -48,11 +44,6 @@ app = QApplication(sys.argv)
 app.setQuitOnLastWindowClosed(False)
 
 SLEEP_TIMEOUT = 30
-
-
-async def acao_palma():
-    log.info("Ação de palma disparada!")
-    await falar("Bom dia senhor Davi, Estou operando a 100%")
 
 
 async def executar(cmd: str):
@@ -73,16 +64,15 @@ async def loop_principal(ui):
 
     registrar_modulos_padrao()
     watchdog.iniciar()
-    log.info("Watchdog iniciado — monitorando IA, áudio, LM Studio e Sentinela")
+    log.info("Watchdog OK")
 
     lm_manager.iniciar_monitoramento(asyncio.get_running_loop())
-    log.info("LM Studio monitoring iniciado")
+    log.info("LM Studio OK")
 
     iniciar_wake_listener()
-    registrar_callback_palma(
-        lambda: asyncio.run_coroutine_threadsafe(acao_palma(), loop_engine)
+    registrar_falar(
+        lambda t: asyncio.run_coroutine_threadsafe(falar(t), loop_engine)
     )
-    iniciar_detector()
     registrar_falar_cb(
         lambda t: asyncio.run_coroutine_threadsafe(falar(t), loop_engine)
     )
@@ -143,7 +133,6 @@ async def loop_principal(ui):
             log.exception("Erro no loop principal")
             await asyncio.sleep(0.3)
 
-    parar_detector()
 
 
 async def aguardar_task_ou_barge(task: asyncio.Task | None):

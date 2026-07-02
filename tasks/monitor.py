@@ -8,9 +8,7 @@ ALERTAS = {
     "tempo": False,
     "bateria": False,
     "temp": False,
-    "cpu": False,
     "rede": False,
-    "ram": False,
     "disco": False,
 }
 INTERVALO_S, TEMP_CRITICA, TEMP_OK, BAT_CRITICA, DISCO_CRITICO, DISCO_OK = (
@@ -21,8 +19,6 @@ INTERVALO_S, TEMP_CRITICA, TEMP_OK, BAT_CRITICA, DISCO_CRITICO, DISCO_OK = (
     90.0,
     80.0,
 )
-CPU_CRITICO = 90
-RAM_CRITICO = 90
 falar_callback, monitor_async_loop = None, None
 _historico_stats: list[dict] = []
 MAX_HISTORICO = 360
@@ -257,26 +253,9 @@ def checar_disco():
         ALERTAS["disco"] = False
 
 
-def checar_cpu_ram():
-    cpu = psutil.cpu_percent(interval=0.5)
-    ram = psutil.virtual_memory().percent
-    if cpu >= CPU_CRITICO and not ALERTAS["cpu"]:
-        registrar_log_alerta("cpu", f"CPU em {cpu}%", cpu)
-        falar(f"CPU em {int(cpu)} por cento.")
-        ALERTAS["cpu"] = True
-    elif cpu < CPU_CRITICO - 10:
-        ALERTAS["cpu"] = False
-    if ram >= RAM_CRITICO and not ALERTAS["ram"]:
-        registrar_log_alerta("ram", f"RAM em {ram}%", ram)
-        falar(f"RAM em {int(ram)} por cento.")
-        ALERTAS["ram"] = True
-    elif ram < RAM_CRITICO - 10:
-        ALERTAS["ram"] = False
-
-
 def monitorar_proativo():
     while True:
-        for fn in [checar_rede, checar_temperatura, checar_bateria, checar_disco, checar_cpu_ram]:
+        for fn in [checar_rede, checar_temperatura, checar_bateria, checar_disco]:
             try:
                 fn()
             except:

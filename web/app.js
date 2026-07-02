@@ -13,16 +13,56 @@ function toast(msg, dur = 2200) {
   _toastTimer = setTimeout(() => t.classList.remove("show"), dur);
 }
 
+function mostrarBridgeBanner() {
+  const b = $("bridge-banner");
+  if (b) b.style.display = "block";
+}
+function esconderBridgeBanner() {
+  const b = $("bridge-banner");
+  if (b) b.style.display = "none";
+}
+
 document.addEventListener("DOMContentLoaded", () => {
-  if (typeof QWebChannel === "undefined") return inicializarUI(null);
-  new QWebChannel(qt.webChannelTransport, (ch) => {
-    jarvis = ch.objects.bridge;
-    if (jarvis.dados_para_ui) jarvis.dados_para_ui.connect((raw) => receberDoBackend(raw));
-    inicializarUI(jarvis);
-  });
   document.querySelectorAll(".dia-btn").forEach(b => {
     b.addEventListener("click", () => b.classList.toggle("sel"));
   });
+
+  let conectou = false;
+  setTimeout(() => { if (!conectou) mostrarBridgeBanner(); }, 4000);
+
+  if (typeof QWebChannel === "undefined") {
+    console.error("[BRIDGE] qwebchannel.js não carregou — QWebChannel indefinido.");
+    mostrarBridgeBanner();
+    return inicializarUI(null);
+  }
+  if (typeof qt === "undefined" || !qt.webChannelTransport) {
+    console.error("[BRIDGE] qt.webChannelTransport indisponível — a página não foi carregada dentro do QWebEngineView com o canal registrado.");
+    toast("⚠ BRIDGE PYTHON NÃO CONECTADO");
+    mostrarBridgeBanner();
+    return inicializarUI(null);
+  }
+
+  try {
+    new QWebChannel(qt.webChannelTransport, (ch) => {
+      jarvis = ch.objects.bridge;
+      if (!jarvis) {
+        console.error("[BRIDGE] Canal aberto mas objeto 'bridge' não foi encontrado. Confira channel.registerObject('bridge', ...) no Python.");
+        toast("⚠ BRIDGE PYTHON NÃO CONECTADO");
+        mostrarBridgeBanner();
+        return inicializarUI(null);
+      }
+      conectou = true;
+      esconderBridgeBanner();
+      if (jarvis.dados_para_ui) jarvis.dados_para_ui.connect((raw) => receberDoBackend(raw));
+      console.log("[BRIDGE] Conectado ao backend Python com sucesso.");
+      inicializarUI(jarvis);
+    });
+  } catch (e) {
+    console.error("[BRIDGE] Falha ao inicializar QWebChannel:", e);
+    toast("⚠ BRIDGE PYTHON NÃO CONECTADO");
+    mostrarBridgeBanner();
+    inicializarUI(null);
+  }
 });
 
 function inicializarUI(jv) {
@@ -41,7 +81,6 @@ function inicializarUI(jv) {
         val("cfg-st", c.smartthings || "");
         val("cfg-tg", c.telegram_token || "");
         val("cfg-tg-auth", c.telegram_auth_token || "");
-        val("cfg-dg", c.deepgram_api_key || "");
         val("cfg-news", c.news_ativo !== false ? "true" : "false");
         val("cfg-briefing", c.briefing_auto !== false ? "true" : "false");
         val("cfg-pomodoro", c.pomodoro_padrao || "25");
@@ -55,8 +94,6 @@ function inicializarUI(jv) {
         val("mail-user", c.email_user || "");
         val("mail-pass", c.email_pass || "");
         setWhisper(c.whisper_model);
-        setSelect("cfg-whisper-device", c.whisper_device);
-        setSelect("cfg-whisper-compute", c.whisper_compute);
         atualizarStatusIA(c);
       } catch (e) {}
     });
@@ -500,13 +537,41 @@ function salvarConfigEmail() {
   const host = $("mail-host")?.value?.trim();
   const user = $("mail-user")?.value?.trim();
   const pass = $("mail-pass")?.value?.trim();
-  if (jarvis?.salvar_configuracao) {
-    if (host) jarvis.salvar_configuracao("email_imap_host", host);
-    if (user) jarvis.salvar_configuracao("email_user", user);
-    if (pass) jarvis.salvar_configuracao("email_pass", pass);
-    toast("✉ CONFIGURAÇÃO SALVA");
-    adicionarLog("sistema", "Configuração de email salva.");
+
+  if (!jarvis?.salvar_configuracao) {
+    toast("⚠ BRIDGE PYTHON NÃO CONECTADO — nada foi salvo");
+    adicionarLog("erro", "Tentativa de salvar config de email sem conexão com o backend.");
+    return;
   }
+
+  const campos = [
+    ["email_imap_host", host],
+    ["email_user", user],
+    ["email_pass", pass],
+  ].filter(([, v]) => !!v);
+
+  if (!campos.length) { toast("⚠ Preencha ao menos um campo."); return; }
+
+  let pendentes = campos.length;
+  let falhas = [];
+
+  campos.forEach(([chave, valor]) => {
+    jarvis.salvar_configuracao(chave, valor, (raw) => {
+      let r;
+      try { r = JSON.parse(raw); } catch (e) { r = null; }
+      if (!r || !r.ok) falhas.push(chave);
+      pendentes--;
+      if (pendentes === 0) {
+        if (falhas.length) {
+          toast("✗ FALHA AO SALVAR: " + falhas.join(", ").toUpperCase());
+          adicionarLog("erro", "Falha ao salvar campos de email: " + falhas.join(", "));
+        } else {
+          toast("✉ CONFIGURAÇÃO SALVA");
+          adicionarLog("sistema", "Configuração de email salva.");
+        }
+      }
+    });
+  });
 }
 window.salvarConfigEmail = salvarConfigEmail;
 
@@ -557,10 +622,29 @@ function renderEmails() {
 function salvarConfig(chave, inputId, btn) {
   const v = $(inputId)?.value?.trim();
   if (v === undefined || v === "") { toast("⚠ O campo não pode ficar vazio."); return; }
-  if (btn) { btn.textContent = "✓"; setTimeout(() => btn.textContent = "SALVAR", 1500); }
-  if (jarvis?.salvar_configuracao) jarvis.salvar_configuracao(chave, v);
-  toast("SALVO: " + chave.toUpperCase());
-  adicionarLog("sistema", "Config atualizada: " + chave);
+
+  if (!jarvis?.salvar_configuracao) {
+    toast("⚠ BRIDGE PYTHON NÃO CONECTADO — nada foi salvo");
+    adicionarLog("erro", "Tentativa de salvar '" + chave + "' sem conexão com o backend.");
+    console.error("[BRIDGE] jarvis.salvar_configuracao indisponível ao salvar '" + chave + "'.");
+    mostrarBridgeBanner();
+    return;
+  }
+
+  jarvis.salvar_configuracao(chave, v, (raw) => {
+    let r;
+    try { r = JSON.parse(raw); } catch (e) { r = null; }
+
+    if (r && r.ok) {
+      if (btn) { btn.textContent = "✓"; setTimeout(() => btn.textContent = "SALVAR", 1500); }
+      toast("SALVO: " + chave.toUpperCase());
+      adicionarLog("sistema", "Config atualizada: " + chave + " → " + (r.arquivo || "?"));
+    } else {
+      toast("✗ FALHA AO SALVAR: " + chave.toUpperCase());
+      adicionarLog("erro", "Falha ao salvar '" + chave + "': " + (r?.erro || "resposta inválida do backend"));
+      console.error("[BRIDGE] Falha ao salvar", chave, r);
+    }
+  });
 }
 window.salvarConfig = salvarConfig;
 

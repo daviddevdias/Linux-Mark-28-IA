@@ -12,7 +12,10 @@ FEEDS = [
     ("bbc", "https://feeds.bbci.co.uk/news/rss.xml"),
 ]
 
-async def parsear_rss(session: aiohttp.ClientSession, label: str, url: str) -> list[dict]:
+
+async def parsear_rss(
+    session: aiohttp.ClientSession, label: str, url: str
+) -> list[dict]:
     try:
         async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as r:
             if r.status != 200:
@@ -27,6 +30,7 @@ async def parsear_rss(session: aiohttp.ClientSession, label: str, url: str) -> l
             return items[:5]
     except:
         return []
+
 
 async def buscar_noticias(limite: int = 5) -> list[str]:
     agora = time.time()
@@ -46,6 +50,7 @@ async def buscar_noticias(limite: int = 5) -> list[str]:
     random.shuffle(todas)
     cache_noticias["noticias"] = (time.time(), todas)
     return [n["titulo"] for n in todas[:limite]]
+
 
 async def noticias_para_fala(limite: int = 3) -> str:
     try:

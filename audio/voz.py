@@ -45,6 +45,44 @@ def limpar_texto(t: str) -> str:
     ).strip()
 
 
+# Palavras/expressões que o Whisper costuma "chutar" errado em português
+# quando ouve comandos curtos como "tv", "televisão", "ligar a tv" etc.
+# Mapeia a forma errada (já normalizada por limpar_texto) -> forma correta.
+# Baseie-se nos logs do console ([Você]: ...) pra ir adicionando novos casos.
+CORRECOES_COMANDO: dict[str, str] = {
+    "tere": "tv",
+    "teré": "tv",
+    "tevere": "tv",
+    "te vere": "tv",
+    "devia": "tv",
+    "tevê": "tv",
+    "te ve": "tv",
+    "the ve": "tv",
+    "thevê": "tv",
+    "tevi": "tv",
+    "tv e": "tv",
+    "detele": "tv",
+    "de tele": "tv",
+    "televisao": "tv",
+    "televisão": "tv",
+}
+
+
+def aplicar_correcoes_comando(texto: str) -> str:
+    """Substitui trechos conhecidos de má-transcrição por palavras-alvo.
+    Roda depois do limpar_texto, então o texto já está minúsculo/sem pontuação."""
+    if not texto:
+        return texto
+    resultado = texto
+    for errado, certo in CORRECOES_COMANDO.items():
+        resultado = re.sub(
+            r"(^|\s)" + re.escape(errado) + r"($|\s)",
+            r"\1" + certo + r"\2",
+            resultado,
+        )
+    return re.sub(r"\s+", " ", resultado).strip()
+
+
 def transcrever(audio: np.ndarray, fs: int = 16000, beam_size: int = 1) -> str:
     try:
         modelo = obter_whisper()
@@ -57,10 +95,17 @@ def transcrever(audio: np.ndarray, fs: int = 16000, beam_size: int = 1) -> str:
             vad_parameters=dict(min_silence_duration_ms=250, speech_pad_ms=400),
             condition_on_previous_text=False,
             temperature=0.0,
-            initial_prompt="Jarvis. Comandos de voz em português: jarvis, abrir, tocar, pesquisar, parar.",
+            initial_prompt=(
+                "Jarvis. Comandos de voz em português: jarvis, abrir, tocar, "
+                "pesquisar, parar, ligar a tv, desligar a tv, ligar televisão, "
+                "desligar televisão, tocar spotify, pausar, próxima música, "
+                "criar alarme, ver clima, notícias, calendário, e-mail, foco, pomodoro."
+            ),
         )
         texto = " ".join(s.text.strip() for s in segments)
-        return limpar_texto(texto)
+        texto = limpar_texto(texto)
+        texto = aplicar_correcoes_comando(texto)
+        return texto
     except Exception as e:
         print(f"Erro Whisper: {e}")
         return ""
@@ -175,7 +220,7 @@ def capturar_audio() -> str:
             return ""
 
         all_audio = np.concatenate(buf).flatten()
-        texto = transcrever(all_audio, fs)
+        texto = transcrever(all_audio, fs, beam_size=5)
         if texto:
             print(f"[Você]: {texto}")
         return texto

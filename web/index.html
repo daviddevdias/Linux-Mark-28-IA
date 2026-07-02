@@ -450,6 +450,9 @@ if (typeof module === 'object') {
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <div id="bridge-banner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:99999;background:#c0392b;color:#fff;font:bold 14px sans-serif;text-align:center;padding:10px;letter-spacing:.5px;">
+    ⚠ BACKEND PYTHON NÃO CONECTADO — nenhuma configuração será salva. Feche e reabra o Jarvis. Se persistir, veja o console (F12) ou o terminal.
+  </div>
   <nav id="sidebar">
     <div id="brand">
       <div id="orb-wrap">
@@ -646,8 +649,6 @@ if (typeof module === 'object') {
             <div class="cfg-hdr">VOZ &amp; MIC</div>
             <div class="cfg-field"><label>VOZ TTS</label><div class="field-row-inline"><input class="field" id="cfg-voz" placeholder="pt-BR-AntonioNeural" /><button class="btn-sm" onclick="salvarConfig('voz','cfg-voz',this)">SALVAR</button></div></div>
             <div class="cfg-field"><label>MODELO WHISPER</label><div class="field-row-inline"><select class="field" id="cfg-whisper"><option>tiny</option><option>base</option><option selected>small</option><option>medium</option><option>large</option></select><button class="btn-sm" onclick="salvarConfig('whisper_model','cfg-whisper',this)">SALVAR</button></div></div>
-            <div class="cfg-field"><label>DISPOSITIVO WHISPER</label><div class="field-row-inline"><select class="field" id="cfg-whisper-device"><option selected>cpu</option><option>cuda</option></select><button class="btn-sm" onclick="salvarConfig('whisper_device','cfg-whisper-device',this)">SALVAR</button></div></div>
-            <div class="cfg-field"><label>PRECIS&#195;O WHISPER</label><div class="field-row-inline"><select class="field" id="cfg-whisper-compute"><option selected>int8</option><option>int8_float16</option><option>float16</option><option>float32</option></select><button class="btn-sm" onclick="salvarConfig('whisper_compute','cfg-whisper-compute',this)">SALVAR</button></div></div>
           </div>
           <div class="card cfg-card"><div class="cfg-hdr">OPENWEATHER</div><div class="cfg-field"><label>API KEY</label><div class="field-row-inline"><input class="field" id="cfg-owm" type="password" placeholder="..." /><button class="btn-sm" onclick="salvarConfig('openweather_api_key','cfg-owm',this)">SALVAR</button></div></div></div>
           <div class="card cfg-card">
@@ -662,13 +663,7 @@ if (typeof module === 'object') {
             <div class="cfg-field"><label>BRIEFING AUTOM&#193;TICO</label><div class="field-row-inline"><select class="field" id="cfg-briefing"><option value="true">Sim</option><option value="false">N&#227;o</option></select><button class="btn-sm" onclick="salvarConfig('briefing_auto','cfg-briefing',this)">SALVAR</button></div></div>
             <div class="cfg-field"><label>POMODORO PADR&#195;O</label><div class="field-row-inline"><input class="field" id="cfg-pomodoro" type="number" placeholder="25" /><button class="btn-sm" onclick="salvarConfig('pomodoro_padrao','cfg-pomodoro',this)">SALVAR</button></div></div>
           </div>
-          <div class="card cfg-card">
-            <div class="cfg-hdr">EMAIL</div>
-            <div class="cfg-field"><label>ATIVAR NO BRIEFING</label><div class="field-row-inline"><select class="field" id="cfg-email-ativo"><option value="true">Sim</option><option value="false">N&#227;o</option></select><button class="btn-sm" onclick="salvarConfig('email_ativo','cfg-email-ativo',this)">SALVAR</button></div></div>
-            <div class="cfg-field"><label>HOST IMAP</label><div class="field-row-inline"><input class="field" id="cfg-email-host" placeholder="imap.gmail.com" /><button class="btn-sm" onclick="salvarConfig('email_imap_host','cfg-email-host',this)">SALVAR</button></div></div>
-            <div class="cfg-field"><label>USU&#193;RIO</label><div class="field-row-inline"><input class="field" id="cfg-email-user" placeholder="seu@email.com" /><button class="btn-sm" onclick="salvarConfig('email_user','cfg-email-user',this)">SALVAR</button></div></div>
-            <div class="cfg-field"><label>SENHA</label><div class="field-row-inline"><input class="field" id="cfg-email-pass" type="password" placeholder="..." /><button class="btn-sm" onclick="salvarConfig('email_pass','cfg-email-pass',this)">SALVAR</button></div></div>
-          </div>
+  
           <div class="card cfg-card">
             <div class="cfg-hdr">CALEND&#193;RIO</div>
             <div class="cfg-field"><label>ATIVAR NO BRIEFING</label><div class="field-row-inline"><select class="field" id="cfg-cal-ativo"><option value="true">Sim</option><option value="false">N&#227;o</option></select><button class="btn-sm" onclick="salvarConfig('calendar_ativo','cfg-cal-ativo',this)">SALVAR</button></div></div>
